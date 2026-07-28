@@ -3,6 +3,7 @@ from typing import Dict, List, Any
 import json
 from unstructured.partition.pdf import partition_pdf
 from unstructured.cleaners.core import clean, replace_unicode_quotes
+from markdownify import markdownify as md
 
 def clean_text(text: str) -> str:
     """
@@ -49,6 +50,7 @@ def parse_pdf_document(file_path: str, strategy: str = "fast") -> List[Dict[str,
             html_table = element_dict.get("metadata", {}).get("text_as_html", "")
             if html_table:
                 element_dict["table_html"] = html_table
+                element_dict["table_markdown"] = md(html_table) # Converting the HTML table to Markdown format; it is better while chunking
 
         extracted_content.append(element_dict)
 
