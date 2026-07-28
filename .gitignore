@@ -1,3 +1,5 @@
 /.venv
 *.json
 *.pdf
+.env
+/qdrant_storage
