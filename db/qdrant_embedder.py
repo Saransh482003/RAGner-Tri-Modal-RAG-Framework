@@ -71,7 +71,7 @@ if __name__ == "__main__":
     with open("advanced_chunks.json", "r", encoding="utf-8") as f:
         chunks = json.load(f)
 
-    COLLECTION_NAME = "resume_project"
+    COLLECTION_NAME = "targaryen_collection"
     
     try:
         q_client = get_qdrant_client()

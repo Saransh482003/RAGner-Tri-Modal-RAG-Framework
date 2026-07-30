@@ -50,6 +50,7 @@ CRITICAL INSTRUCTIONS:
 3. If you find the answer, you MUST cite the Source and Page Number provided in the context snippet (e.g., "[sample.pdf, Page 13]").
 4. If the context contains Markdown tables, read the rows and columns carefully to extract the correct data.
 
+Very Important: Only give the answer. Do not provide any additional commentary, explanations, or information outside of the context. NO THINKING OUT LOUD. NO ADDITIONAL INFORMATION. NO GUESSING. NO EXTERNAL KNOWLEDGE. STRICTLY STICK TO THE CONTEXT.
 =========================================
 Context:
 {formatted_context}
@@ -107,9 +108,9 @@ if __name__ == "__main__":
     
     llm_client = initialize_llm_client()
     q_client = get_qdrant_client()
-    COLLECTION_NAME = "resume_project"
+    COLLECTION_NAME = "targaryen_collection"
     
-    test_query = "What was the Net income in 2024?"
+    test_query = "What is the seat of House Targaryen?"
     
     print(f"\nUser Question: {test_query}")
 

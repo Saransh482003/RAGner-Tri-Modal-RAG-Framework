@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     from db.qdrant_embedder import get_qdrant_client
     
-    COLLECTION_NAME = "resume_project"
+    COLLECTION_NAME = "targaryen_collection"
     
     try:
         q_client = get_qdrant_client()
