@@ -8,3 +8,5 @@ langchain-text-splitters
 markdownify
 groq
 python-dotenv
+uvicorn
+streamlit

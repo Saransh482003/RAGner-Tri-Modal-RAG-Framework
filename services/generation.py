@@ -61,7 +61,7 @@ User Question: {query}
 Answer:"""
     return prompt
 
-def generate_answer(client: Groq, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "qwen/qwen3.6-27b") -> str:
+def generate_answer(client: Groq, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "llama-3.1-8b-instant") -> str:
     """
     Takes the query and the context, builds the prompt, and calls the Groq LLM.
     """

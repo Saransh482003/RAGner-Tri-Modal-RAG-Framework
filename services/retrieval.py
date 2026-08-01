@@ -4,10 +4,7 @@ from qdrant_client import QdrantClient
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import CrossEncoder
 
-embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-reranker = CrossEncoder("BAAI/bge-reranker-base")
-
-def retrieve_context(client: QdrantClient, collection_name: str, query: str, bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
+def retrieve_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
     """
     Takes a user query, embeds it, and searches Qdrant for the most similar chunks.
     Returns the payload (text and metadata) of those chunks.
@@ -20,7 +17,10 @@ def retrieve_context(client: QdrantClient, collection_name: str, query: str, bi_
         limit=bi_encoder_top_k,
         with_payload=True
     )
+    if not search_results:
+        return []
 
+    # Cross-encoder reranking
     pairs = []
     for hit in search_results.points:
         chunk_text = hit.payload.get("text", "")
@@ -61,7 +61,9 @@ if __name__ == "__main__":
         q_client = get_qdrant_client()
         
         test_query = "What was the Net income in 2024?"
-        results = retrieve_context(q_client, COLLECTION_NAME, test_query, bi_encoder_top_k=15, cross_encoder_top_k=3)
+        embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        reranker = CrossEncoder("BAAI/bge-reranker-base")
+        results = retrieve_context(q_client, COLLECTION_NAME, test_query, embedder, reranker, bi_encoder_top_k=15, cross_encoder_top_k=3)
         
         print("\n--- Retrieval Results ---")
         for i, res in enumerate(results):

@@ -3,3 +3,6 @@
 *.pdf
 .env
 /qdrant_storage
+__pycache__/
+**/__pycache__/
+*.py[cod]
