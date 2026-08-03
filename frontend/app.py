@@ -13,11 +13,14 @@ st.markdown("Upload a document and ask questions about it.")
 with st.sidebar:
     st.header("Document Ingestion")
     uploaded_file = st.file_uploader("Upload a PDF", type=["pdf"])
+
+    use_raptor = st.checkbox("Enable RAPTOR Processing", value=True, help="Clusters and summarizes chunks for deep contextual understanding. Takes longer to process.")
     
     if st.button("Process Document"):
         if uploaded_file is not None:
-            with st.spinner("Processing (this may take a minute for high-res parsing)..."):
+            with st.spinner("Processing (this may take a minute for high-res parsing and LLM clustering)..."):
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                data = {"use_raptor": "true" if use_raptor else "false"}
                 try:
                     response = requests.post(f"{API_URL}/upload", files=files)
                     if response.status_code == 200:
@@ -36,6 +39,21 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+st.write("### Query Configuration")
+
+STRATEGIES = {
+    "vanilla": "Vanilla RAG (Raw Leaf Chunks Only)",
+    "raptor": "RAPTOR (Collapsed Tree: Leaves + Summaries)"
+}
+
+strategy_option = st.radio(
+    "Retrieval Strategy", 
+    options=list(STRATEGIES.keys()), 
+    format_func=lambda x: STRATEGIES[x],
+    horizontal=True,
+    index=0
+)
+
 if prompt := st.chat_input("Ask a question about your documents..."):
     st.chat_message("user").markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -44,7 +62,7 @@ if prompt := st.chat_input("Ask a question about your documents..."):
         message_placeholder = st.empty()
         with st.spinner("Thinking (Retrieving & Reranking)..."):
             try:
-                response = requests.post(f"{API_URL}/query", json={"query": prompt})
+                response = requests.post(f"{API_URL}/query", json={"query": prompt, "strategy": strategy_option})
                 if response.status_code == 200:
                     data = response.json()
                     answer = data.get("answer", "No answer generated.")

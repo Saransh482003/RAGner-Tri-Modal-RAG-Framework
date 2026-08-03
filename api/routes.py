@@ -25,6 +25,7 @@ except Exception as e:
 
 class QueryRequest(BaseModel):
     query: str
+    strategy: str = "vanilla"  # Default to "vanilla" if not provided
 
 @router.post("/upload")
 async def upload_document(request: Request, file: UploadFile = File(...)):
@@ -69,11 +70,12 @@ async def query_documents(request: Request, body: QueryRequest):
         reranker = request.app.state.reranker
 
         retrieved_chunks = retrieve_context(
-            q_client, 
-            COLLECTION_NAME, 
-            body.query, 
+            client=q_client, 
+            collection_name=COLLECTION_NAME, 
+            query=body.query,
             embedder=embedder,
             reranker=reranker,
+            strategy=body.strategy,
             bi_encoder_top_k=15, 
             cross_encoder_top_k=3
         )

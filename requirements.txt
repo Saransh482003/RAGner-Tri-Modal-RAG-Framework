@@ -10,3 +10,6 @@ groq
 python-dotenv
 uvicorn
 streamlit
+umap-learn 
+scikit-learn 
+numpy
