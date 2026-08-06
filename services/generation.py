@@ -41,14 +41,16 @@ def build_prompt(query: str, retrieved_chunks: List[Dict[str, Any]]) -> str:
             context_texts.append(f"--- Document Excerpt {i+1} (Source: {source}, Page: {page}) ---\n{chunk['text']}")
     
     formatted_context = "\n\n".join(context_texts)
-    prompt = f"""You are a highly precise financial and academic research assistant. 
+    prompt = f"""You are helpful bot that reads the context given to it, and answers the question based on the provided context. 
 Your goal is to answer the user's question accurately using ONLY the context provided.
 
 CRITICAL INSTRUCTIONS:
 1. You MUST answer the question using ONLY the information provided in the "Context" section below.
 2. If the Context does not contain the answer, you MUST state exactly: "I cannot answer this question based on the provided documents." Do not guess.
 3. If you find the answer, you MUST cite the Source and Page Number provided in the context snippet (e.g., "[sample.pdf, Page 13]").
-4. If the context contains Markdown tables, read the rows and columns carefully to extract the correct data.
+4. Your answers should be complete, don't fall into the trap of providing partial answers. Example: Not giving complete names, or not providing all the details requested in the question.
+5. You are highly encouraged to synthesize, compare, and connect information across different excerpts to form a complete answer.
+6. If the context contains Markdown tables, read the rows and columns carefully to extract the correct data.
 
 Very Important: Only give the answer. Do not provide any additional commentary, explanations, or information outside of the context. NO THINKING OUT LOUD. NO ADDITIONAL INFORMATION. NO GUESSING. NO EXTERNAL KNOWLEDGE. STRICTLY STICK TO THE CONTEXT.
 =========================================

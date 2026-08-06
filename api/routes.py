@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form
 from pydantic import BaseModel
 import os
 import shutil
@@ -6,6 +6,7 @@ import tempfile
 
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
+from services.raptor import build_raptor_tree
 from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
 from services.retrieval import retrieve_context
 from services.generation import initialize_llm_client, generate_answer
@@ -28,7 +29,7 @@ class QueryRequest(BaseModel):
     strategy: str = "vanilla"  # Default to "vanilla" if not provided
 
 @router.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...), use_raptor: bool = Form(False)):
     """
     Receives a PDF, saves it temporarily, parses, chunks, and stores it in Qdrant.
     """
@@ -46,6 +47,10 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
         elements = parse_pdf_document(temp_file_path, strategy="hi_res")
         chunks = advanced_chunking(elements)
         embedder = request.app.state.embedder
+
+        if use_raptor:
+            chunks = build_raptor_tree(chunks, embedder, llm_client)
+        init_collection(q_client, COLLECTION_NAME)
         upsert_chunks(q_client, COLLECTION_NAME, chunks, embedder)
         return {
                 "message": f"Successfully processed '{file.filename}'",
@@ -77,7 +82,7 @@ async def query_documents(request: Request, body: QueryRequest):
             reranker=reranker,
             strategy=body.strategy,
             bi_encoder_top_k=15, 
-            cross_encoder_top_k=3
+            cross_encoder_top_k=5
         )
         answer = generate_answer(llm_client, body.query, retrieved_chunks, model_name=MODEL_NAME)
         return {

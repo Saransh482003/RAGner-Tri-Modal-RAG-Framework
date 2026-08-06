@@ -22,7 +22,7 @@ with st.sidebar:
                 files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
                 data = {"use_raptor": "true" if use_raptor else "false"}
                 try:
-                    response = requests.post(f"{API_URL}/upload", files=files)
+                    response = requests.post(f"{API_URL}/upload", files=files, data=data)
                     if response.status_code == 200:
                         st.success(f"Success! {response.json().get('chunks_created')} chunks added to database.")
                     else:
@@ -70,7 +70,7 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                     message_placeholder.markdown(answer)
                     
                     if sources:
-                        with st.expander("View Retrieved Context (Top 3 Reranked)"):
+                        with st.expander(f"View Retrieved Context (Top {len(sources)} Reranked)"):
                             for i, source in enumerate(sources):
                                 st.markdown(f"**Source {i+1}: Page {source['metadata']['page_number']}** (Reranker Score: {source['cross_encoder_score']:.2f})")
                                 st.code(source['text'][:500] + "..." if len(source['text']) > 500 else source['text'])
