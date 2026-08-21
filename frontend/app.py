@@ -42,6 +42,7 @@ for message in st.session_state.messages:
 st.write("### Query Configuration")
 
 STRATEGIES = {
+    "auto": "Auto-Routed (Let Groq decide)",
     "vanilla": "Vanilla RAG (Raw Leaf Chunks Only)",
     "raptor": "RAPTOR (Collapsed Tree: Leaves + Summaries)"
 }
@@ -67,6 +68,11 @@ if prompt := st.chat_input("Ask a question about your documents..."):
                     data = response.json()
                     answer = data.get("answer", "No answer generated.")
                     sources = data.get("sources", [])
+
+                    used_strategy = data.get("strategy_used", "unknown").upper()
+                    if strategy_option == "auto":
+                        st.caption(f"*(Groq Auto-Routed to **{used_strategy}** strategy)*")
+
                     message_placeholder.markdown(answer)
                     
                     if sources:

@@ -10,6 +10,7 @@ from services.raptor import build_raptor_tree
 from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
 from services.retrieval import retrieve_context
 from services.generation import initialize_llm_client, generate_answer
+from services.query_router import route_query
 
 router = APIRouter()
 
@@ -26,7 +27,7 @@ except Exception as e:
 
 class QueryRequest(BaseModel):
     query: str
-    strategy: str = "vanilla"  # Default to "vanilla" if not provided
+    strategy: str = "auto"
 
 @router.post("/upload")
 async def upload_document(request: Request, file: UploadFile = File(...), use_raptor: bool = Form(False)):
@@ -74,6 +75,10 @@ async def query_documents(request: Request, body: QueryRequest):
         embedder = request.app.state.embedder
         reranker = request.app.state.reranker
 
+        active_strategy = body.strategy
+        if active_strategy == "auto":
+            active_strategy = route_query(llm_client, body.query) 
+
         retrieved_chunks = retrieve_context(
             client=q_client, 
             collection_name=COLLECTION_NAME, 
@@ -88,7 +93,8 @@ async def query_documents(request: Request, body: QueryRequest):
         return {
             "query": body.query,
             "answer": answer,
-            "sources": retrieved_chunks
+            "sources": retrieved_chunks,
+            "strategy_used": active_strategy 
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
