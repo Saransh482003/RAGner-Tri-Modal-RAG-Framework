@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from pydantic import BaseModel
 import os
 import shutil
@@ -6,14 +6,13 @@ import tempfile
 
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
-from services.raptor import build_raptor_tree
+from services.builder_raptor import build_raptor_tree
 from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
-from services.retrieval import retrieve_context
+from services.retrieval_vector import retrieve_vector_context
 from services.generation import initialize_llm_client, generate_answer
 from services.query_router import route_query
 
 router = APIRouter()
-
 q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
 COLLECTION_NAME = "targaryen_collection"
@@ -29,8 +28,28 @@ class QueryRequest(BaseModel):
     query: str
     strategy: str = "auto"
 
+def run_advanced_pipeline_background(base_chunks, embedder, llm_client, q_client, collection_name):
+    """
+    Executes the heavy RAPTOR and GraphRAG operations in a background thread.
+    """
+    try:
+        print("Starting RAPTOR and GraphRAG processing in the background...")
+
+        collapsed_tree = build_raptor_tree(base_chunks, embedder, llm_client)
+        summary_chunks = [
+            chunk for chunk in collapsed_tree 
+            if chunk["metadata"].get("chunk_type") in ["raptor_summary", "raptor_root_summary"]
+        ]
+        if summary_chunks:
+            print(f"[Background Task] Upserting {len(summary_chunks)} summary chunks to Qdrant...")
+            upsert_chunks(q_client, collection_name, collapsed_tree, embedder)
+            print(f"[Background Task] Building Knowledge Graph with {len(summary_chunks)} summary chunks...")
+            build_knowledge_graph(summary_chunks, llm_client)
+    except Exception as e:
+        print(f"[Background Task] Error during RAPTOR and GraphRAG processing: {e}")
+
 @router.post("/upload")
-async def upload_document(request: Request, file: UploadFile = File(...), use_raptor: bool = Form(False)):
+async def upload_document(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...), use_advanced: bool = Form(False)):
     """
     Receives a PDF, saves it temporarily, parses, chunks, and stores it in Qdrant.
     """
@@ -38,25 +57,34 @@ async def upload_document(request: Request, file: UploadFile = File(...), use_ra
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     
     temp_file_path = f"temp_{file.filename}"
+    with open(temp_file_path, "wb") as f:
+        f.write(await file.read())
 
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            temp_file_path = tmp.name
-
         # PDF Parsing, Chunking, and Upserting to Qdrant
         elements = parse_pdf_document(temp_file_path, strategy="hi_res")
-        chunks = advanced_chunking(elements)
+        base_chunks = advanced_chunking(elements)
         embedder = request.app.state.embedder
 
-        if use_raptor:
-            chunks = build_raptor_tree(chunks, embedder, llm_client)
         init_collection(q_client, COLLECTION_NAME)
-        upsert_chunks(q_client, COLLECTION_NAME, chunks, embedder)
-        return {
-                "message": f"Successfully processed '{file.filename}'",
-                "chunks_created": len(chunks)
+        upsert_chunks(q_client, COLLECTION_NAME, base_chunks, embedder)
+
+        if use_advanced:
+            background_tasks.add_task(
+                run_advanced_pipeline_background, 
+                base_chunks, embedder, llm_client, q_client, COLLECTION_NAME
+            )
+            
+            return {
+                "message": "Upload successful! Base chunks ready for Vanilla RAG.",
+                "status": "Background processing started for RAPTOR and GraphRAG.",
+                "base_chunks": len(base_chunks)
             }
+        return {
+            "message": "Upload successful!",
+            "status": "Vanilla RAG only. No advanced pipeline triggered.",
+            "base_chunks": len(base_chunks)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -79,7 +107,7 @@ async def query_documents(request: Request, body: QueryRequest):
         if active_strategy == "auto":
             active_strategy = route_query(llm_client, body.query) 
 
-        retrieved_chunks = retrieve_context(
+        retrieved_chunks = retrieve_vector_context(
             client=q_client, 
             collection_name=COLLECTION_NAME, 
             query=body.query,

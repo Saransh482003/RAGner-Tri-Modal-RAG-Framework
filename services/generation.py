@@ -106,7 +106,7 @@ if __name__ == "__main__":
     root_dir = Path(__file__).resolve().parent.parent
     sys.path.append(str(root_dir))
     from db.qdrant_embedder import get_qdrant_client
-    from services.retrieval import retrieve_context
+    from services.retrieval_vector import retrieve_vector_context
     
     llm_client = initialize_llm_client()
     q_client = get_qdrant_client()
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     
     print(f"\nUser Question: {test_query}")
 
-    results = retrieve_context(q_client, COLLECTION_NAME, test_query, bi_encoder_top_k=15, cross_encoder_top_k=3)
+    results = retrieve_vector_context(q_client, COLLECTION_NAME, test_query, bi_encoder_top_k=15, cross_encoder_top_k=3)
     
     if llm_client:
         answer = generate_answer(llm_client, test_query, results)

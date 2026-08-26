@@ -2,7 +2,7 @@ import re
 from typing import List, Dict, Any
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, chunk_overlap: int = 300) -> List[Dict[str, Any]]:
+def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, chunk_overlap: int = 400) -> List[Dict[str, Any]]:
     """
     Combines text elements and splits them using LangChain's RecursiveCharacterTextSplitter.
     Handles CompositeElements by extracting their text and splitting it recursively.
@@ -34,6 +34,7 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
         
         if el_type in ["Table", "TableChunk"]:
             table_context = ""
+            # Added 1-2 senetences of context before the table for better understanding
             if current_text_block.strip():
                 sentences = re.split(r'(?<=[.!?])\s+', current_text_block.strip())
                 table_context = " ".join(sentences[-2:]) if len(sentences) >= 2 else sentences[0]
