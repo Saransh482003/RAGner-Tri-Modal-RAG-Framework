@@ -1,5 +1,7 @@
+import time
 import numpy as np
 import umap
+import os
 from sklearn.mixture import GaussianMixture
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
@@ -8,6 +10,9 @@ from collections import defaultdict
 from tqdm import tqdm
 
 from services.generation import initialize_llm_client
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_optimal_clusters_gmm(embeddings: np.ndarray, max_clusters: int = 50, random_state: int = 42) -> int:
     """
@@ -89,7 +94,7 @@ def perform_clustering(embeddings: np.ndarray, dim: int = 10, algo: str = "kmean
     
     return labels.tolist()
 
-def summarize_cluster(llm_client, texts: List[str], is_root: bool = False) -> str:
+def summarize_cluster(llm_client, texts: List[str], is_root: bool = False, max_retries: int = 3) -> str:
     """
     Prompts the LLM to generate a strict, continuous narrative summary.
     Dynamically switches prompts based on whether it is an intermediate or root summary.
@@ -126,17 +131,24 @@ CRITICAL CONSTRAINTS:
 Excerpts:
 {combined_text}
 """
-    try:
-        chat_completion = llm_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
-            temperature=0.1, 
-            max_tokens=1024,
-        )
-        return chat_completion.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"Error during cluster summarization: {e}")
-        return "Summarization Failed: " + texts[0][:500] + "..." 
+    for attempt in range(max_retries):
+        try:
+            chat_completion = llm_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+                temperature=0.0, 
+                max_tokens=1500,
+            )
+            return chat_completion.choices[0].message.content.strip()
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "rate limit" in error_msg or "429" in error_msg:
+                wait_time = 10 * (attempt + 1)
+                print(f"[RAPTOR] Rate limit hit! Sleeping for {wait_time}s (Attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+            else:
+                print(f"[RAPTOR] Error during cluster summarization: {e}")
+                break
 
 def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, max_levels: int = 3, clustering_algo: str = "kmeans") -> List[Dict[str, Any]]:
     """
@@ -190,11 +202,15 @@ def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, m
             next_level_nodes.append(summary_node)
             collapsed_tree.append(summary_node)
 
+            time.sleep(2)
+
         current_level_nodes = next_level_nodes
 
     if len(current_level_nodes) > 1:
         print(f"\n--- Generating Final Root Document Summary (Level {current_level + 1}) ---")
+        print(current_level_nodes[:5])
         final_texts = [node["text"] for node in current_level_nodes]
+        print(final_texts[:5])
         root_summary_text = summarize_cluster(llm_client, final_texts, is_root=True)
         
         root_node = {

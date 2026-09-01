@@ -4,6 +4,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchAny
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import CrossEncoder
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def retrieve_vector_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, strategy: str = "vanilla", bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
     """
@@ -68,7 +71,7 @@ if __name__ == "__main__":
     sys.path.append(str(root_dir))
     from db.qdrant_embedder import get_qdrant_client
     
-    COLLECTION_NAME = "targaryen_collection"
+    COLLECTION_NAME = "targaryen_collection_adv"
     
     try:
         q_client = get_qdrant_client()

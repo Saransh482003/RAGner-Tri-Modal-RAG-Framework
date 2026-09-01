@@ -4,6 +4,9 @@ import json
 from unstructured.partition.pdf import partition_pdf
 from unstructured.cleaners.core import clean, replace_unicode_quotes
 from markdownify import markdownify as md
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def clean_text(text: str) -> str:
     """

@@ -1,5 +1,9 @@
 import json
+import os
 from groq import Groq
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def route_query(llm_client, query: str) -> str:
     """
@@ -26,7 +30,7 @@ User Query: {query}
         print(f"Asking LLM Router for decision...")
         chat_completion = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
             temperature=0.0,
             response_format={"type": "json_object"},
             max_tokens=10

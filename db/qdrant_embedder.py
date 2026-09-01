@@ -4,6 +4,9 @@ from typing import List, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from langchain_huggingface import HuggingFaceEmbeddings
+from dotenv import load_dotenv
+
+load_dotenv()
 
 VECTOR_SIZE = 384 
 
@@ -70,7 +73,7 @@ if __name__ == "__main__":
     with open("advanced_chunks.json", "r", encoding="utf-8") as f:
         chunks = json.load(f)
 
-    COLLECTION_NAME = "targaryen_collection"
+    COLLECTION_NAME = "targaryen_collection_adv"
     embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
     
     try:

@@ -1,7 +1,8 @@
 import re
 import os
 from typing import List, Dict, Any
-from groq import Groq
+# from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,13 +16,20 @@ def clean_text(text: str) -> str:
     text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     text = " ".join(text.split())
     return text
+
 def initialize_llm_client():
-    """Initializes the Groq client."""
+    """Initializes the OpenAI client."""
     try:
-        return Groq()
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPEN_ROUTER_API_KEY"),
+        )
+        return client
+        # return Groq()
     
     except Exception as e:
-        print(f"Failed to initialize Groq client. Did you set GROQ_API_KEY? Error: {e}")
+        # print(f"Failed to initialize Groq client. Did you set GROQ_API_KEY? Error: {e}")
+        print(f"Failed to initialize OpenAI client. Did you set OPEN_ROUTER_API_KEY? Error: {e}")
         return None
 
 def build_prompt(query: str, retrieved_chunks: List[Dict[str, Any]]) -> str:
@@ -63,15 +71,15 @@ User Question: {query}
 Answer:"""
     return prompt
 
-def generate_answer(client: Groq, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "llama-3.1-8b-instant") -> str:
+def generate_answer(client: OpenAI, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "thinkingmachines/inkling-small:free") -> str:
     """
-    Takes the query and the context, builds the prompt, and calls the Groq LLM.
+    Takes the query and the context, builds the prompt, and calls the OpenAI LLM.
     """
     if not retrieved_chunks:
          return "I'm sorry, I couldn't find any relevant information in the database to answer your question."
          
     if not client:
-        return "LLM Client is not initialized. Please check your Groq API key."
+        return "LLM Client is not initialized. Please check your OpenRouter API key."
 
     prompt = build_prompt(query, retrieved_chunks)
     
@@ -110,7 +118,7 @@ if __name__ == "__main__":
     
     llm_client = initialize_llm_client()
     q_client = get_qdrant_client()
-    COLLECTION_NAME = "targaryen_collection"
+    COLLECTION_NAME = "targaryen_collection_adv"
     
     test_query = "What is the seat of House Targaryen?"
     

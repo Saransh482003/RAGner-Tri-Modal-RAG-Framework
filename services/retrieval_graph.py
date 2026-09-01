@@ -1,7 +1,11 @@
+import os
 import json
 from typing import List, Dict, Any
 from models.graph_query_templates import GRAPH_TEMPLATES
-from builder_graph import get_neo4j_driver
+from services.builder_graph import get_neo4j_driver
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def retrieve_graph_context(query: str, llm_client) -> List[Dict[str, Any]]:
     """
@@ -50,7 +54,7 @@ Output Format Example:
     try:
         response = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
             temperature=0.0,
             response_format={"type": "json_object"}
         )
@@ -64,6 +68,7 @@ Output Format Example:
         return retrieve_graph_context(query, llm_client) # Try again if the template_id is invalid
     
     selected_query = GRAPH_TEMPLATES[template_id]["cypher"]
+    print(f"[Graph Retrieval] Using template '{template_id}' with params: {params}")
     retrieved_edges = []
     with driver.session() as session:
         try:

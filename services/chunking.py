@@ -1,6 +1,9 @@
 import re
 from typing import List, Dict, Any
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, chunk_overlap: int = 400) -> List[Dict[str, Any]]:
     """

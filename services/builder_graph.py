@@ -4,6 +4,9 @@ import re
 from typing import List, Dict, Any
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
+from dotenv import load_dotenv
+
+load_dotenv()
 
 NEO4J_URI = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
@@ -38,11 +41,12 @@ Document Summary:
     try:
         response = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
             temperature=0.0,
             response_format={"type": "json_object"}
         )
         ontology = json.loads(response.choices[0].message.content).get("relations", [])
+        print(f"Generated Ontology: {ontology[:5]}")
         return ontology
     except Exception as e:
         print(f"Ontology generation failed: {e}")
@@ -70,7 +74,7 @@ Output format:
     try:
         response = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
             temperature=0.0,
             response_format={"type": "json_object"}
         )
