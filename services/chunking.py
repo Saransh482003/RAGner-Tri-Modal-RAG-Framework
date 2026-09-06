@@ -22,18 +22,40 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
 
     chunks = []
     current_text_block = ""
-    current_metadata = {}
+    current_source = None
+    current_page = None
+
+    def flush_text_block(text_block: str, source: str, page: Any):
+        if not text_block.strip():
+            return
+        split_texts = text_splitter.split_text(text_block)
+        for split in split_texts:
+            chunks.append({
+                "text": split.strip(),
+                "metadata": {
+                    "source": source or "unknown",
+                    "page_number": page if page is not None else 1,
+                    "chunk_type": "text"
+                }
+            })
 
     for el in elements:
         text = el.get("text", "")
         el_type = el.get("type", "")
         metadata = el.get("metadata", {})
+        el_source = metadata.get("filename", metadata.get("source", "unknown"))
+        el_page = metadata.get("page_number", 1)
 
-        if not current_metadata:
-            current_metadata = {
-                "source": metadata.get("filename", metadata.get("source", "unknown")),
-                "page_number": metadata.get("page_number")
-            }
+        if current_source is None:
+            current_source = el_source
+            current_page = el_page
+
+        # Flush block if page or source transitions to preserve accurate chunk attribution
+        if (el_source != current_source or el_page != current_page) and current_text_block.strip():
+            flush_text_block(current_text_block, current_source, current_page)
+            current_text_block = ""
+            current_source = el_source
+            current_page = el_page
         
         if el_type in ["Table", "TableChunk"]:
             table_context = ""
@@ -44,20 +66,8 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
 
             # Flushing accumulated text BEFORE the table
             if current_text_block.strip():
-                split_texts = text_splitter.split_text(current_text_block)
-                for split in split_texts:
-                    chunks.append({
-                        "text": split.strip(),
-                        "metadata": {
-                            **current_metadata,
-                            "chunk_type": "text"
-                        }
-                    })
+                flush_text_block(current_text_block, current_source, current_page)
                 current_text_block = ""
-                current_metadata = {
-                    "source": metadata.get("filename", metadata.get("source", "unknown")),
-                    "page_number": metadata.get("page_number")
-                }
 
             table_content = el.get("table_markdown")
             if not table_content:
@@ -68,12 +78,11 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
                 chunks.append({
                     "text": table_content,
                     "metadata": {
-                        **current_metadata,
+                        "source": el_source,
+                        "page_number": el_page,
                         "chunk_type": "table"
                     }
                 })
-            
-            current_metadata = {}
             continue
 
         elif el_type == "Title":
@@ -83,17 +92,8 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
         elif el_type in ["CompositeElement", "NarrativeText", "Text", "ListItem"]:
              current_text_block += f"{text} \n"
 
-
     if current_text_block.strip():
-        split_texts = text_splitter.split_text(current_text_block)
-        for split in split_texts:
-            chunks.append({
-                "text": split.strip(),
-                "metadata": {
-                    **current_metadata,
-                    "chunk_type": "text"
-                }
-            })
+        flush_text_block(current_text_block, current_source, current_page)
         
     return chunks
 

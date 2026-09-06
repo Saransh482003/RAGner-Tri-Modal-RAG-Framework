@@ -59,6 +59,8 @@ def parse_pdf_document(file_path: str, strategy: str = "fast") -> List[Dict[str,
 
     return extracted_content
 
-
-with open("sample-hi-res.json", "w", encoding="utf-8") as f:
-    f.write(json.dumps(parse_pdf_document("History of House Targaryen.pdf", strategy="hi_res"), ensure_ascii=False, indent=4))
+if __name__ == "__main__":
+    test_pdf = "History of House Targaryen.pdf"
+    if os.path.exists(test_pdf):
+        with open("sample-hi-res.json", "w", encoding="utf-8") as f:
+            f.write(json.dumps(parse_pdf_document(test_pdf, strategy="hi_res"), ensure_ascii=False, indent=4))

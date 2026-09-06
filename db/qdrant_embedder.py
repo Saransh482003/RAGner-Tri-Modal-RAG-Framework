@@ -73,7 +73,7 @@ if __name__ == "__main__":
     with open("advanced_chunks.json", "r", encoding="utf-8") as f:
         chunks = json.load(f)
 
-    COLLECTION_NAME = "targaryen_collection_adv"
+    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
     embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
     
     try:

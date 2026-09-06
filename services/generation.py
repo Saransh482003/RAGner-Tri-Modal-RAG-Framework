@@ -118,7 +118,7 @@ if __name__ == "__main__":
     
     llm_client = initialize_llm_client()
     q_client = get_qdrant_client()
-    COLLECTION_NAME = "targaryen_collection_adv"
+    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
     
     test_query = "What is the seat of House Targaryen?"
     

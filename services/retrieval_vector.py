@@ -1,31 +1,39 @@
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, MatchAny
+from qdrant_client.models import Filter, FieldCondition, MatchAny, MatchValue
 from langchain_huggingface import HuggingFaceEmbeddings
 from sentence_transformers import CrossEncoder
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def retrieve_vector_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, strategy: str = "vanilla", bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
+def retrieve_vector_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, strategy: str = "vanilla", document_source: Optional[str] = None, bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
     """
     Takes a user query, embeds it, searches Qdrant for a broad set of matches,
     and then uses a Cross-Encoder to strictly rerank them.
     """
     query_embedding = embedder.embed_query(query)
 
-    # If Vanilla is selected, filter is set only for text and table chunks. For advance
-    query_filter = None
+    # If Vanilla is selected, filter is set only for text and table chunks.
+    filter_conditions = []
     if strategy == "vanilla":
-        query_filter = Filter(
-            must=[
-                FieldCondition(
-                    key="chunk_type",
-                    match=MatchAny(any=["text", "table"])
-                )
-            ]
+        filter_conditions.append(
+            FieldCondition(
+                key="chunk_type",
+                match=MatchAny(any=["text", "table"])
+            )
         )
+
+    if document_source:
+        filter_conditions.append(
+            FieldCondition(
+                key="source",
+                match=MatchValue(value=document_source)
+            )
+        )
+
+    query_filter = Filter(must=filter_conditions) if filter_conditions else None
 
     search_results = client.query_points(
         collection_name=collection_name,
@@ -71,7 +79,7 @@ if __name__ == "__main__":
     sys.path.append(str(root_dir))
     from db.qdrant_embedder import get_qdrant_client
     
-    COLLECTION_NAME = "targaryen_collection_adv"
+    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
     
     try:
         q_client = get_qdrant_client()

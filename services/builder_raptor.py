@@ -163,13 +163,14 @@ def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, m
 
     collapsed_tree = list(leaf_chunks)
     current_level_nodes = list(leaf_chunks)
-    current_level = 1
+    last_processed_level = 0
 
     for level in range(1, max_levels + 1):
         if len(current_level_nodes) <= 3:
             print(f"Level {level}: 3 or fewer nodes remaining. Stopping recursion.")
             break 
 
+        last_processed_level = level
         print(f"\nProcessing Level {level}...")
 
         texts = [node["text"] for node in current_level_nodes]
@@ -190,6 +191,9 @@ def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, m
                 continue
             cluster_texts = [node["text"] for node in nodes]
             summary_text = summarize_cluster(llm_client, cluster_texts, is_root=False)
+            if not summary_text:
+                continue
+
             summary_node = {
                 "text": summary_text,
                 "metadata": {
@@ -207,22 +211,22 @@ def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, m
         current_level_nodes = next_level_nodes
 
     if len(current_level_nodes) > 1:
-        print(f"\n--- Generating Final Root Document Summary (Level {current_level + 1}) ---")
-        print(current_level_nodes[:5])
+        root_level = last_processed_level + 1
+        print(f"\n--- Generating Final Root Document Summary (Level {root_level}) ---")
         final_texts = [node["text"] for node in current_level_nodes]
-        print(final_texts[:5])
         root_summary_text = summarize_cluster(llm_client, final_texts, is_root=True)
-        
-        root_node = {
-            "text": root_summary_text,
-            "metadata": {
-                "chunk_type": "raptor_root_summary",
-                "raptor_level": current_level + 1,
-                "source": current_level_nodes[0]["metadata"].get("source", "unknown"),
-                "page_number": "Global Document Summary"
+
+        if root_summary_text:
+            root_node = {
+                "text": root_summary_text,
+                "metadata": {
+                    "chunk_type": "raptor_root_summary",
+                    "raptor_level": root_level,
+                    "source": current_level_nodes[0]["metadata"].get("source", "unknown"),
+                    "page_number": "Global Document Summary"
+                }
             }
-        }
-        collapsed_tree.append(root_node)
+            collapsed_tree.append(root_node)
     return collapsed_tree
 
 if __name__ == "__main__":

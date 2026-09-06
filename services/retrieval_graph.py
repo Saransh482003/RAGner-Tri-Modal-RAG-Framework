@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def retrieve_graph_context(query: str, llm_client) -> List[Dict[str, Any]]:
+def retrieve_graph_context(query: str, llm_client, max_retries: int = 2) -> List[Dict[str, Any]]:
     """
     Retrieves the context for the questions, by first determining the type of query and then executing the appropriate graph query.
     """
@@ -28,6 +28,7 @@ def retrieve_graph_context(query: str, llm_client) -> List[Dict[str, Any]]:
             print(f"Warning: Could not fetch relationships from Neo4j: {e}")
 
     if not valid_relations:
+        driver.close()
         raise ValueError("No valid relationships found in the Neo4j database. Please ensure that the graph has been populated with data.")
 
 
@@ -51,27 +52,34 @@ CRITICAL INSTRUCTIONS:
 Output Format Example:
 {{"template_id": "relationship_search", "params": {{"entity": "Albert Einstein", "action_verb": "conquered"}}}}
 """
-    try:
-        response = llm_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
-            temperature=0.0,
-            response_format={"type": "json_object"}
-        )
-        decision = json.loads(response.choices[0].message.content)
-        template_id = decision.get("template_id")
-        params = decision.get("params", {})
-    except Exception as e:
-        raise ValueError(f"Extraction failed: {e}")
+    template_id = None
+    params = {}
+    for _ in range(max_retries):
+        try:
+            response = llm_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+                temperature=0.0,
+                response_format={"type": "json_object"}
+            )
+            decision = json.loads(response.choices[0].message.content)
+            candidate_id = decision.get("template_id")
+            if candidate_id in GRAPH_TEMPLATES:
+                template_id = candidate_id
+                params = decision.get("params", {})
+                break
+        except Exception as e:
+            print(f"[Graph Retrieval] LLM extraction error: {e}")
 
-    if template_id not in GRAPH_TEMPLATES:
-        return retrieve_graph_context(query, llm_client) # Try again if the template_id is invalid
+    if not template_id:
+        driver.close()
+        return []
     
     selected_query = GRAPH_TEMPLATES[template_id]["cypher"]
     print(f"[Graph Retrieval] Using template '{template_id}' with params: {params}")
     retrieved_edges = []
-    with driver.session() as session:
-        try:
+    try:
+        with driver.session() as session:
             result = session.run(selected_query, **params)
             for record in result:
                 record_text = record.get("chunk_text") or " | ".join([f"{k}: {v}" for k, v in record.items()])
@@ -84,8 +92,9 @@ Output Format Example:
                     },
                     "cross_encoder_score": 1.0 
                 })
-        except Exception as e:
-            raise ValueError(f"[Graph Retrieval] Neo4j Execution Failed: {e}")
-        
-    driver.close()
+    except Exception as e:
+        print(f"[Graph Retrieval] Neo4j Execution Failed: {e}")
+    finally:
+        driver.close()
+
     return retrieved_edges

@@ -1,4 +1,6 @@
 import os
+import uuid
+from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from pydantic import BaseModel
 
@@ -18,7 +20,7 @@ load_dotenv()
 router = APIRouter()
 q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
-COLLECTION_NAME = "targaryen_collection_adv"
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
 MODEL_NAME = os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free")
 
 try:
@@ -30,76 +32,92 @@ except Exception as e:
 class QueryRequest(BaseModel):
     query: str
     strategy: str = "auto"
+    document_name: Optional[str] = None
 
-def run_advanced_pipeline_background(base_chunks, embedder, llm_client, q_client, collection_name):
+def run_advanced_pipeline_background(doc_chunks_map, embedder, llm_client, q_client, collection_name):
     """
     Executes the heavy RAPTOR and GraphRAG operations in a background thread.
     """
     try:
         print("Starting RAPTOR and GraphRAG processing in the background...")
 
-        collapsed_tree = build_raptor_tree(base_chunks, embedder, llm_client)
-        summary_chunks = [
-            chunk for chunk in collapsed_tree 
-            if chunk["metadata"].get("chunk_type") in ["raptor_summary", "raptor_root_summary"]
-        ]
-        if summary_chunks:
-            try:
-                print(f"[Background Task] Upserting {len(summary_chunks)} summary chunks to Qdrant...")
-                upsert_chunks(q_client, collection_name, collapsed_tree, embedder)
-            except Exception as e:
-                print(f"[Background Task] Error upserting chunks to Qdrant: {e}")
-            try:
-                print(f"[Background Task] Building Knowledge Graph with {len(summary_chunks)} summary chunks...")
-                build_knowledge_graph(summary_chunks, llm_client)
-            except Exception as e:
-                print(f"[Background Task] Error building knowledge graph: {e}")
+        for doc_name, base_chunks in doc_chunks_map.items():
+            print(f"[Background Task] Building RAPTOR tree for document: {doc_name}")
+            collapsed_tree = build_raptor_tree(base_chunks, embedder, llm_client)
+            summary_chunks = [
+                chunk for chunk in collapsed_tree 
+                if chunk["metadata"].get("chunk_type") in ["raptor_summary", "raptor_root_summary"]
+            ]
+            if summary_chunks:
+                try:
+                    # Upsert only newly synthesized summary nodes to avoid re-embedding base leaves
+                    print(f"[Background Task] Upserting {len(summary_chunks)} summary chunks to Qdrant...")
+                    upsert_chunks(q_client, collection_name, summary_chunks, embedder)
+                except Exception as e:
+                    print(f"[Background Task] Error upserting summary chunks to Qdrant: {e}")
+                try:
+                    print(f"[Background Task] Building Knowledge Graph with {len(summary_chunks)} summary chunks...")
+                    build_knowledge_graph(summary_chunks, llm_client, document_name=doc_name)
+                except Exception as e:
+                    print(f"[Background Task] Error building knowledge graph: {e}")
     except Exception as e:
         print(f"[Background Task] Error during RAPTOR and GraphRAG processing: {e}")
 
 
 @router.post("/upload")
-async def upload_document(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...), use_advanced: bool = Form(False)):
+async def upload_document(request: Request, background_tasks: BackgroundTasks, files: List[UploadFile] = File(...), use_advanced: bool = Form(False)):
     """
     Synchronously parses and upserts base chunks for instant Vanilla RAG.
     Asynchronously builds the RAPTOR Tree and Knowledge Graph.
     """
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    
-    temp_file_path = f"temp_{file.filename}"
-    with open(temp_file_path, "wb") as f:
-        f.write(await file.read())
+    embedder = request.app.state.embedder
+    total_base_chunks = 0
+    doc_chunks_map = {}
 
-    try:
-        # PDF Parsing, Chunking, and Upserting to Qdrant
-        elements = parse_pdf_document(temp_file_path, strategy="hi_res")
-        base_chunks = advanced_chunking(elements)
-        embedder = request.app.state.embedder
+    for file in files:
+        if not file.filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+        
+        temp_file_path = f"temp_{file.filename}"
+        with open(temp_file_path, "wb") as f:
+            f.write(await file.read())
 
-        init_collection(q_client, COLLECTION_NAME)
-        upsert_chunks(q_client, COLLECTION_NAME, base_chunks, embedder)
+        try:
+            # PDF Parsing, Chunking, and Upserting to Qdrant
+            elements = parse_pdf_document(temp_file_path, strategy="hi_res")
+            for el in elements:
+                if "metadata" in el:
+                    el["metadata"]["filename"] = file.filename
 
-        if use_advanced:
-            background_tasks.add_task(
-                run_advanced_pipeline_background, 
-                base_chunks, embedder, llm_client, q_client, COLLECTION_NAME
-            )
-            return {
-                "message": "Upload successful! Base chunks ready for Vanilla RAG.",
-                "status": "Background processing started for RAPTOR and GraphRAG.",
-                "base_chunks": len(base_chunks)
-            }
+            base_chunks = advanced_chunking(elements)
+            if base_chunks:
+                upsert_chunks(q_client, COLLECTION_NAME, base_chunks, embedder)
+                total_base_chunks += len(base_chunks)
+                doc_chunks_map[file.filename] = base_chunks
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error processing {file.filename}: {str(e)}")
+        finally:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+    if use_advanced and doc_chunks_map:
+        background_tasks.add_task(
+            run_advanced_pipeline_background, 
+            doc_chunks_map, embedder, llm_client, q_client, COLLECTION_NAME
+        )
         return {
-            "message": "Upload successful!",
-            "status": "Vanilla RAG only. No advanced pipeline triggered.",
-            "base_chunks": len(base_chunks)
+            "message": f"Successfully processed {len(files)} document(s). Base chunks ready for Vanilla RAG.",
+            "status": "Background processing started for RAPTOR and GraphRAG.",
+            "total_base_chunks": total_base_chunks,
+            "documents": list(doc_chunks_map.keys())
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+
+    return {
+        "message": f"Successfully processed {len(files)} document(s).",
+        "status": "Vanilla RAG only. No advanced pipeline triggered.",
+        "total_base_chunks": total_base_chunks,
+        "documents": list(doc_chunks_map.keys())
+    }
 
 
 @router.post("/query")
@@ -108,7 +126,7 @@ async def query_documents(request: Request, body: QueryRequest):
     Routes the query to the correct strategy (Vector, Tree, or Graph) and generates an answer.
     """
     if not llm_client:
-        raise HTTPException(status_code=500, detail="LLM Client not initialized. Check GROQ_API_KEY.")
+        raise HTTPException(status_code=500, detail="LLM Client not initialized. Check OPEN_ROUTER_API_KEY.")
 
     try:
         embedder = request.app.state.embedder
@@ -130,6 +148,7 @@ async def query_documents(request: Request, body: QueryRequest):
                     embedder=embedder,
                     reranker=reranker,
                     strategy="vanilla",
+                    document_source=body.document_name,
                     bi_encoder_top_k=15, 
                     cross_encoder_top_k=5
                 )
@@ -140,7 +159,8 @@ async def query_documents(request: Request, body: QueryRequest):
                 query=body.query,
                 embedder=embedder,
                 reranker=reranker,
-                strategy=body.strategy,
+                strategy=active_strategy,
+                document_source=body.document_name,
                 bi_encoder_top_k=15, 
                 cross_encoder_top_k=5
             )
