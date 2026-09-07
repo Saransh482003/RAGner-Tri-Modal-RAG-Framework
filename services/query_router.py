@@ -30,10 +30,10 @@ User Query: {query}
         print(f"Asking LLM Router for decision...")
         chat_completion = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+            model=os.getenv("GENERATION_MODEL", "openrouter/free"),
             temperature=0.0,
             response_format={"type": "json_object"},
-            max_tokens=10
+            max_tokens=20
         )
         
         raw_output = chat_completion.choices[0].message.content.strip()

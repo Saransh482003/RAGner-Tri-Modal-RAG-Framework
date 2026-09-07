@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def retrieve_graph_context(query: str, llm_client, max_retries: int = 2) -> List[Dict[str, Any]]:
+def retrieve_graph_context(query: str, llm_client, project_name: str = "default_project", max_retries: int = 2) -> List[Dict[str, Any]]:
     """
     Retrieves the context for the questions, by first determining the type of query and then executing the appropriate graph query.
     """
@@ -22,7 +22,8 @@ def retrieve_graph_context(query: str, llm_client, max_retries: int = 2) -> List
     valid_relations = []
     with driver.session() as session:
         try:
-            res = session.run("MATCH ()-[r:CONNECTED_TO]->() RETURN DISTINCT r.type AS relation LIMIT 20")
+            # Only fetch relationships belonging to the active project
+            res = session.run("MATCH ()-[r:CONNECTED_TO {project: $project}]->() RETURN DISTINCT r.type AS relation LIMIT 20", project=project_name)
             valid_relations = [record["relation"] for record in res if record["relation"]]
         except Exception as e:
             print(f"Warning: Could not fetch relationships from Neo4j: {e}")
@@ -58,7 +59,7 @@ Output Format Example:
         try:
             response = llm_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+                model=os.getenv("GENERATION_MODEL", "openrouter/free"),
                 temperature=0.0,
                 response_format={"type": "json_object"}
             )
@@ -76,13 +77,20 @@ Output Format Example:
         return []
     
     selected_query = GRAPH_TEMPLATES[template_id]["cypher"]
+
+    params["project"] = project_name
     print(f"[Graph Retrieval] Using template '{template_id}' with params: {params}")
+
     retrieved_edges = []
     try:
         with driver.session() as session:
             result = session.run(selected_query, **params)
             for record in result:
-                record_text = record.get("chunk_text") or " | ".join([f"{k}: {v}" for k, v in record.items()])
+                if "narrative" in record and record["narrative"]:
+                    record_text = f"{record.get('source', '')} -[{record.get('relation', '')}]-> {record.get('target', '')} (Context: {record['narrative']})"
+                else:
+                    # Fallback for complex queries like shortest_path
+                    record_text = " | ".join([f"{k}: {v}" for k, v in record.items()])
                 retrieved_edges.append({
                     "text": record_text,
                     "metadata": {

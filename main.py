@@ -1,26 +1,26 @@
+import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from langchain_huggingface import HuggingFaceEmbeddings
-from sentence_transformers import CrossEncoder
-
+from services.api_clients import APIEmbedder, APIReranker
 from api.routes import router
+from dotenv import load_dotenv
 
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("--- SERVER STARTUP: Loading Machine Learning Models ---")
     
     print("Loading Bi-Encoder Embedding Model...")
-    app.state.embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+    app.state.embedder = APIEmbedder(model=os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small"))
     
     print("Loading Cross-Encoder Reranking Model...")
-    app.state.reranker = CrossEncoder("BAAI/bge-reranker-base")
+    app.state.reranker = APIReranker(model=os.getenv("RERANKER_MODEL", "cohere/rerank-v3.5"))
     
     print("--- Models Loaded Successfully! ---")
-    
     yield # The application runs and handles requests here
     
     print("--- SERVER SHUTDOWN: Cleaning up resources ---")

@@ -135,9 +135,9 @@ Excerpts:
         try:
             chat_completion = llm_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+                model=os.getenv("GENERATION_MODEL", "openrouter/free"),
                 temperature=0.0, 
-                max_tokens=1500,
+                max_tokens=500,
             )
             return chat_completion.choices[0].message.content.strip()
         except Exception as e:

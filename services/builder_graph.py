@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
+from api_clients import APIGenerator
 
 load_dotenv()
 
@@ -50,7 +51,7 @@ Document Summary:
     try:
         response = llm_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+            model=os.getenv("GENERATION_MODEL", "openrouter/free"),
             temperature=0.0,
             response_format={"type": "json_object"}
         )
@@ -84,7 +85,7 @@ Output format:
         try:
             response = llm_client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model=os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free"),
+                model=os.getenv("GENERATION_MODEL", "openrouter/free"),
                 temperature=0.0,
                 response_format={"type": "json_object"}
             )
@@ -142,7 +143,7 @@ def resolve_entities(triplets: List[Dict[str, str]]) -> List[Dict[str, str]]:
         normalized_triplets.append(normalized_triplet)
     return normalized_triplets
 
-def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_name: Optional[str] = None):
+def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_name: Optional[str] = None, project_name: str = "default_project"):
     """
     Orchestrates extraction, canonicalization, and ingestion into Neo4j.
     Now includes robust Checkpointing to survive API crashes!
@@ -203,16 +204,21 @@ def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_nam
 
     normalized_triplets = resolve_entities(all_raw_triplets)
 
-    print(f"Pushing {len(normalized_triplets)} normalised triplets to Neo4j...")
+    print(f"Pushing {len(normalized_triplets)} normalised triplets to Neo4j for project: {project_name}...")
     with driver.session() as session:
+        try:
+            session.run("DROP CONSTRAINT entity_id_unique IF EXISTS")
+        except Exception:
+            pass
         session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE")
+
         for t in normalized_triplets:
             # Generic 'CONNECTED_TO' Edge to store relation
             cypher_query = """
-            MERGE (s:Entity {id: $source})
-            MERGE (t:Entity {id: $target})
-            MERGE (s)-[r:CONNECTED_TO {type: $relation}]->(t)
-            ON CREATE SET r.source_text = $source_text
+            MERGE (s:Entity {id: $source, project: $project})
+            MERGE (t:Entity {id: $target, project: $project})
+            MERGE (s)-[r:CONNECTED_TO {type: $relation, project: $project}]->(t)
+            ON CREATE SET r.source_text = $source_text, r.source_doc = $source_doc
             """
             session.run(
                 cypher_query, 
@@ -220,7 +226,8 @@ def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_nam
                 target=t["target"], 
                 relation=t["relation"], 
                 source_text=t.get("source_text", ""),
-                source_doc=t.get("source_doc", "unknown")
+                source_doc=t.get("source_doc", "unknown"),
+                project=project_name
             )
             
     driver.close()

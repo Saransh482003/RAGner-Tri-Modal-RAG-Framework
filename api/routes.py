@@ -1,8 +1,9 @@
 import os
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from pydantic import BaseModel
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
@@ -20,11 +21,11 @@ load_dotenv()
 router = APIRouter()
 q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
-COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
-MODEL_NAME = os.getenv("GENERATION_MODEL", "thinkingmachines/inkling-small:free")
+DEFAULT_PROJECT = os.getenv("DEFAULT_PROJECT", "ragner_collection")
+MODEL_NAME = os.getenv("GENERATION_MODEL", "openrouter/free")
 
 try:
-    init_collection(q_client, COLLECTION_NAME)
+    init_collection(q_client, DEFAULT_PROJECT, vector_size=1536)
 except Exception as e:
     print(f"Warning: Could not connect to Qdrant on startup. {e}")
 
@@ -33,8 +34,41 @@ class QueryRequest(BaseModel):
     query: str
     strategy: str = "auto"
     document_name: Optional[str] = None
+    project_name: str = "default_project"
 
-def run_advanced_pipeline_background(doc_chunks_map, embedder, llm_client, q_client, collection_name):
+class RebuildRequest(BaseModel):
+    project_name: str = "default_project"
+    document_name: Optional[str] = None
+    build_raptor: bool = False
+    build_graph: bool = True
+    
+
+def get_existing_chunks_from_qdrant(
+    q_client, 
+    collection_name: str, 
+    doc_name: Optional[str] = None, 
+    chunk_type: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Retrieves already stored chunks from Qdrant without re-reading PDFs."""
+    filter_conditions = []
+    if doc_name:
+        filter_conditions.append(FieldCondition(key="source", match=MatchValue(value=doc_name)))
+    if chunk_type:
+        filter_conditions.append(FieldCondition(key="chunk_type", match=MatchValue(value=chunk_type)))
+
+    q_filter = Filter(must=filter_conditions) if filter_conditions else None
+
+    points, _ = q_client.scroll(
+        collection_name=collection_name,
+        scroll_filter=q_filter,
+        limit=1000,
+        with_payload=True,
+        with_vectors=False
+    )
+    return [{"text": p.payload.get("text", ""), "metadata": p.payload} for p in points]
+
+
+def run_advanced_pipeline_background(doc_chunks_map, embedder, llm_client, q_client, project_name):
     """
     Executes the heavy RAPTOR and GraphRAG operations in a background thread.
     """
@@ -52,12 +86,12 @@ def run_advanced_pipeline_background(doc_chunks_map, embedder, llm_client, q_cli
                 try:
                     # Upsert only newly synthesized summary nodes to avoid re-embedding base leaves
                     print(f"[Background Task] Upserting {len(summary_chunks)} summary chunks to Qdrant...")
-                    upsert_chunks(q_client, collection_name, summary_chunks, embedder)
+                    upsert_chunks(q_client, project_name, summary_chunks, embedder)
                 except Exception as e:
                     print(f"[Background Task] Error upserting summary chunks to Qdrant: {e}")
                 try:
                     print(f"[Background Task] Building Knowledge Graph with {len(summary_chunks)} summary chunks...")
-                    build_knowledge_graph(summary_chunks, llm_client, document_name=doc_name)
+                    build_knowledge_graph(summary_chunks, llm_client, document_name=doc_name, project_name=project_name)
                 except Exception as e:
                     print(f"[Background Task] Error building knowledge graph: {e}")
     except Exception as e:
@@ -65,7 +99,7 @@ def run_advanced_pipeline_background(doc_chunks_map, embedder, llm_client, q_cli
 
 
 @router.post("/upload")
-async def upload_document(request: Request, background_tasks: BackgroundTasks, files: List[UploadFile] = File(...), use_advanced: bool = Form(False)):
+async def upload_document(request: Request, background_tasks: BackgroundTasks, files: List[UploadFile] = File(...), use_advanced: bool = Form(False), project_name: str = Form(...)):
     """
     Synchronously parses and upserts base chunks for instant Vanilla RAG.
     Asynchronously builds the RAPTOR Tree and Knowledge Graph.
@@ -91,7 +125,8 @@ async def upload_document(request: Request, background_tasks: BackgroundTasks, f
 
             base_chunks = advanced_chunking(elements)
             if base_chunks:
-                upsert_chunks(q_client, COLLECTION_NAME, base_chunks, embedder)
+                init_collection(q_client, project_name, vector_size=1536)
+                upsert_chunks(q_client, project_name, base_chunks, embedder)
                 total_base_chunks += len(base_chunks)
                 doc_chunks_map[file.filename] = base_chunks
 
@@ -103,7 +138,7 @@ async def upload_document(request: Request, background_tasks: BackgroundTasks, f
     if use_advanced and doc_chunks_map:
         background_tasks.add_task(
             run_advanced_pipeline_background, 
-            doc_chunks_map, embedder, llm_client, q_client, COLLECTION_NAME
+            doc_chunks_map, embedder, llm_client, q_client, project_name
         )
         return {
             "message": f"Successfully processed {len(files)} document(s). Base chunks ready for Vanilla RAG.",
@@ -135,15 +170,17 @@ async def query_documents(request: Request, body: QueryRequest):
         active_strategy = body.strategy
         if active_strategy == "auto":
             routing_decision = route_query(llm_client, body.query)
-            active_strategy = routing_decision.get("strategy", "vanilla") 
+            # active_strategy = routing_decision.get("strategy", "vanilla") 
+            active_strategy = routing_decision
 
+        active_collection = body.project_name
         if active_strategy == "graph":
-            retrieved_chunks = retrieve_graph_context(body.query, llm_client)
+            retrieved_chunks = retrieve_graph_context(body.query, llm_client, project_name=active_collection)
 
             if not retrieved_chunks:
                 retrieved_chunks = retrieve_vector_context(
                     client=q_client, 
-                    collection_name=COLLECTION_NAME, 
+                    collection_name=active_collection, 
                     query=body.query,
                     embedder=embedder,
                     reranker=reranker,
@@ -155,7 +192,7 @@ async def query_documents(request: Request, body: QueryRequest):
         else:
             retrieved_chunks = retrieve_vector_context(
                 client=q_client, 
-                collection_name=COLLECTION_NAME, 
+                collection_name=active_collection, 
                 query=body.query,
                 embedder=embedder,
                 reranker=reranker,

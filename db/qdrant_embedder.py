@@ -8,17 +8,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VECTOR_SIZE = 384 
-
 def get_qdrant_client() -> QdrantClient:
     """
     Connects to the local Qdrant Docker container.
     Ensure Docker is running and you have executed: docker run -p 6333:6333 qdrant/qdrant
     """
-    client = QdrantClient(url="http://localhost:6333")
-    return client
+    qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333")
+    qdrant_api_key = os.getenv("QDRANT_API_KEY", None)
 
-def init_collection(client: QdrantClient, collection_name: str):
+    if qdrant_api_key:
+        print("Connecting to Managed Qdrant Cloud...")
+        return QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+    
+    print("Connecting to Local Qdrant Docker...")
+    return QdrantClient(url=qdrant_url)
+
+def init_collection(client: QdrantClient, collection_name: str, vector_size=1536):
     """
     Creates a new collection in Qdrant if it doesn't exist.
     A 'collection' in Qdrant is like a table in a relational database.
@@ -28,7 +33,7 @@ def init_collection(client: QdrantClient, collection_name: str):
         client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(
-                size=VECTOR_SIZE, 
+                size=vector_size, 
                 distance=Distance.COSINE # Cosine similarity is standard for text embeddings, we can shift to EUCLIDEAN if we want.
             ),
         )

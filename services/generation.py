@@ -71,7 +71,7 @@ User Question: {query}
 Answer:"""
     return prompt
 
-def generate_answer(client: OpenAI, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "thinkingmachines/inkling-small:free") -> str:
+def generate_answer(client: OpenAI, query: str, retrieved_chunks: List[Dict[str, Any]], model_name: str = "openrouter/free") -> str:
     """
     Takes the query and the context, builds the prompt, and calls the OpenAI LLM.
     """
@@ -99,8 +99,11 @@ def generate_answer(client: OpenAI, query: str, retrieved_chunks: List[Dict[str,
             temperature=0.0, 
             max_tokens=1024,
         )
-
-        model_response = clean_text(chat_completion.choices[0].message.content)
+        raw_content = chat_completion.choices[0].message.content
+        if raw_content is None:
+            return "The model failed to generate a response. It may have encountered an internal error or triggered a content filter on the provider's end."
+        
+        model_response = clean_text(raw_content)
         return model_response
         
     except Exception as e:
