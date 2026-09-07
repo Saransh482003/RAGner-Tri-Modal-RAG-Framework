@@ -7,4 +7,4 @@ __pycache__/
 **/__pycache__/
 *.py[cod]
 **/node_modules/
-benchmarking/
+!benchmarking/**/*.pdf

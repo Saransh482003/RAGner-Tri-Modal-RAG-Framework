@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import styles from "@/styles/Home.module.css";
 import { 
   Send, Paperclip, FileText, Database, 
-  Network, Zap, ChevronDown, ChevronUp, Loader2
+  Network, Zap, ChevronDown, ChevronUp, Loader2, RefreshCw
 } from "lucide-react";
 
 const geistSans = Geist({
@@ -72,7 +72,14 @@ export default function Home() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [strategy, setStrategy] = useState("auto");
-  const [useAdvanced, setUseAdvanced] = useState(false);
+  
+  // New Workspace & Pipeline State
+  const [projectName, setProjectName] = useState("portfolio-demo");
+  const [buildRaptor, setBuildRaptor] = useState(true);
+  const [buildGraph, setBuildGraph] = useState(true);
+  const [isRebuilding, setIsRebuilding] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+
   const [files, setFiles] = useState(null);
   const [uploadedDocs, setUploadedDocs] = useState([]);
   const [selectedDoc, setSelectedDoc] = useState("all");
@@ -91,9 +98,15 @@ export default function Home() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
+    setStatusMessage("Uploading and extracting base chunks...");
+    
     const formData = new FormData();
     Array.from(files).forEach(file => formData.append("files", file));
-    formData.append("use_advanced", useAdvanced.toString());
+    
+    // Append new granular build configurations
+    formData.append("project_name", projectName);
+    formData.append("build_raptor", buildRaptor.toString());
+    formData.append("build_graph", buildGraph.toString());
 
     try {
       const response = await fetch("http://localhost:8000/api/v1/upload", {
@@ -104,18 +117,55 @@ export default function Home() {
       const data = await response.json();
       if (response.ok) {
         setUploadedDocs(prev => Array.from(new Set([...prev, ...data.documents])));
-        setMessages(prev => [...prev, { 
-          role: "ai", 
-          content: `✅ Successfully processed ${files.length} document(s). ${data.status}` 
-        }]);
+        setStatusMessage(data.message || "Upload complete!");
+        
+        let successMsg = `✅ Successfully processed ${files.length} document(s) into workspace '${projectName}'.`;
+        if (data.stages_queued?.raptor || data.stages_queued?.graph) {
+           successMsg += ` Background tasks queued.`;
+        }
+        
+        setMessages(prev => [...prev, { role: "ai", content: successMsg }]);
       } else {
         throw new Error(data.detail || "Upload failed");
       }
     } catch (error) {
       setMessages(prev => [...prev, { role: "ai", content: `❌ Error: ${error.message}`, isError: true }]);
+      setStatusMessage("Upload failed.");
     } finally {
       setIsUploading(false);
       setFiles(null);
+    }
+  };
+
+  const handleStageRebuild = async (stage) => {
+    setIsRebuilding(true);
+    setStatusMessage(`Triggering background ${stage.toUpperCase()} build...`);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/pipeline/rebuild", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: projectName,
+          document_name: selectedDoc === "all" ? null : selectedDoc,
+          build_raptor: stage === "raptor" || stage === "all",
+          build_graph: stage === "graph" || stage === "all",
+        }),
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setStatusMessage(data.status || "Stage triggered successfully!");
+        setMessages(prev => [...prev, { role: "ai", content: `🔄 Recovery Initiated: ${data.status}` }]);
+      } else {
+        throw new Error(data.detail || "Rebuild failed");
+      }
+    } catch (error) {
+      console.error("Rebuild error:", error);
+      setStatusMessage("Failed to trigger stage rebuild.");
+      setMessages(prev => [...prev, { role: "ai", content: `❌ Error: ${error.message}`, isError: true }]);
+    } finally {
+      setIsRebuilding(false);
     }
   };
 
@@ -135,6 +185,7 @@ export default function Home() {
         body: JSON.stringify({
           query: userQuery,
           strategy: strategy,
+          project_name: projectName, // Pass active workspace to query router
           document_name: selectedDoc === "all" ? null : selectedDoc
         }),
       });
@@ -178,7 +229,23 @@ export default function Home() {
           </div>
 
           <div className={styles.sidebarContent}>
-            <h2 className={styles.sectionTitle}>Ingestion</h2>
+            
+            {/* Workspace Selection */}
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#4b5563", marginBottom: "8px", textTransform: "uppercase" }}>
+                Active Workspace
+              </label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                placeholder="e.g. portfolio-demo"
+                className={styles.textInput}
+                style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.875rem" }}
+              />
+            </div>
+
+            <h2 className={styles.sectionTitle}>Ingestion Pipeline</h2>
             
             <form onSubmit={handleUpload}>
               <div className={styles.uploadBox}>
@@ -198,16 +265,23 @@ export default function Home() {
                 </label>
               </div>
 
-              <div className={styles.checkboxGroup}>
-                <input
-                  type="checkbox"
-                  id="advanced"
-                  checked={useAdvanced}
-                  onChange={(e) => setUseAdvanced(e.target.checked)}
-                />
-                <label htmlFor="advanced" style={{ fontSize: "0.875rem", color: "#374151", cursor: "pointer", flex: 1 }}>
-                  Run Advanced Pipeline
-                  <span style={{ display: "block", fontSize: "0.75rem", color: "#6b7280" }}>RAPTOR Tree & GraphRAG</span>
+              {/* Granular Pipeline Controls */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px", marginTop: "12px" }}>
+                <label style={{ fontSize: "0.875rem", display: "flex", alignItems: "center", gap: "8px", color: "#374151", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={buildRaptor}
+                    onChange={(e) => setBuildRaptor(e.target.checked)}
+                  />
+                  Build RAPTOR Tree (K-Means)
+                </label>
+                <label style={{ fontSize: "0.875rem", display: "flex", alignItems: "center", gap: "8px", color: "#374151", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={buildGraph}
+                    onChange={(e) => setBuildGraph(e.target.checked)}
+                  />
+                  Build Knowledge Graph (Neo4j)
                 </label>
               </div>
 
@@ -221,9 +295,44 @@ export default function Home() {
               </button>
             </form>
 
+            {/* Stage Recovery Tools */}
+            <div style={{ marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e5e7eb" }}>
+              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6b7280", marginBottom: "12px", textTransform: "uppercase" }}>
+                Stage Recovery (No Re-upload)
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  disabled={isRebuilding}
+                  onClick={() => handleStageRebuild("raptor")}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "8px", fontSize: "0.75rem", background: "#ffffff", border: "1px solid #d1d5db", borderRadius: "6px", cursor: "pointer", color: "#374151", fontWeight: 500 }}
+                >
+                  <RefreshCw size={12} className={isRebuilding ? styles.spin : ""} />
+                  RAPTOR
+                </button>
+                <button
+                  type="button"
+                  disabled={isRebuilding}
+                  onClick={() => handleStageRebuild("graph")}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "8px", fontSize: "0.75rem", background: "#ffffff", border: "1px solid #d1d5db", borderRadius: "6px", cursor: "pointer", color: "#374151", fontWeight: 500 }}
+                >
+                  <RefreshCw size={12} className={isRebuilding ? styles.spin : ""} />
+                  GRAPH
+                </button>
+              </div>
+            </div>
+
+            {/* Global Status Message Pill */}
+            {statusMessage && (
+              <div style={{ marginTop: "16px", fontSize: "0.75rem", color: "#1d4ed8", background: "#eff6ff", padding: "10px", borderRadius: "6px", border: "1px solid #bfdbfe", fontWeight: 500, lineHeight: "1.4" }}>
+                {statusMessage}
+              </div>
+            )}
+
+            {/* Active Document Context */}
             {uploadedDocs.length > 0 && (
               <div style={{ marginTop: "32px" }}>
-                <h2 className={styles.sectionTitle}>Active Context</h2>
+                <h2 className={styles.sectionTitle}>Global Corpus</h2>
                 <ul className={styles.docList}>
                   {uploadedDocs.map((doc, idx) => (
                     <li key={idx} className={styles.docItem}>
@@ -244,7 +353,7 @@ export default function Home() {
               <div className={styles.emptyState}>
                 <Network size={48} color="#d1d5db" style={{ marginBottom: "16px" }} />
                 <h2 style={{ fontSize: "1.25rem", fontWeight: 500, color: "#4b5563", margin: 0 }}>Workspace Initialized</h2>
-                <p style={{ fontSize: "0.875rem", marginTop: "8px" }}>Upload documents to begin querying the graph.</p>
+                <p style={{ fontSize: "0.875rem", marginTop: "8px", color: "#6b7280" }}>Upload documents or query an existing project workspace to begin.</p>
               </div>
             ) : (
               messages.map((msg, idx) => {
@@ -265,7 +374,7 @@ export default function Home() {
                         </div>
                       )}
 
-                      <div>{msg.content}</div>
+                      <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
 
                       {msg.sources && msg.sources.length > 0 && (
                         <div className={styles.sourcesSection}>
@@ -287,7 +396,7 @@ export default function Home() {
               <div className={`${styles.messageRow} ${styles.rowAi}`}>
                 <div className={styles.loadingPill}>
                   <Loader2 size={18} className={styles.spin} />
-                  <span>Navigating Knowledge Graph...</span>
+                  <span>Navigating Vector Space & Knowledge Graph...</span>
                 </div>
               </div>
             )}
@@ -314,7 +423,7 @@ export default function Home() {
                     value={selectedDoc}
                     onChange={(e) => setSelectedDoc(e.target.value)}
                     className={styles.selectInput}
-                    style={{ textOverflow: "ellipsis" }}
+                    style={{ textOverflow: "ellipsis", maxWidth: "200px" }}
                   >
                     <option value="all">Global Corpus</option>
                     {uploadedDocs.map((doc, idx) => (
@@ -329,7 +438,7 @@ export default function Home() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask your document anything..."
+                  placeholder={`Ask questions about '${projectName}'...`}
                   className={styles.textInput}
                 />
                 <button

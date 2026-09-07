@@ -8,7 +8,6 @@ from typing import List, Dict, Any, Optional
 from rapidfuzz import fuzz
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
-from api_clients import APIGenerator
 
 load_dotenv()
 
@@ -72,13 +71,15 @@ def extract_triplets(llm_client, text: str, ontology: List[str], max_retries: in
 Extract relationships from the text into a JSON list of triplets.
 
 CRITICAL INSTRUCTIONS:
-1. NEVER extract pronouns (he, she, they). Resolve pronouns to the specific proper noun using context.
-2. Use the most complete version of a name (e.g., "Albert Einstein" instead of "Einstein").
-3. You MUST choose relationships ONLY from this list: {ontology_str}
+1. EXACT JSON KEYS: Every triplet MUST contain exactly these three keys: "source", "relation", and "target". Do NOT rename "relation" to "relationship" or anything else.
+2. STRICT ONTOLOGY: You MUST choose the "relation" ONLY from this exact list: [{ontology_str}]. Do not invent new verbs.
+3. NO PRONOUNS: Never extract pronouns (he, she, they, it). Resolve them to the specific proper noun using context.
+4. COMPLETE NAMES: Use the most complete version of an entity's name (e.g., "Aortic Pulse Wave Velocity" instead of "PWV" or "Velocity").
+5. EMPTY STATE: If no valid relationships from the ontology are found in the text, return exactly: {{"triplets": []}}
 
 Text: {text}
 
-Output format:
+Output format MUST strictly match this structure:
 {{"triplets": [{{"source": "Entity1", "relation": "chosen_relation", "target": "Entity2"}}]}}
 """
     for attempt in range(max_retries):
@@ -136,11 +137,21 @@ def resolve_entities(triplets: List[Dict[str, str]]) -> List[Dict[str, str]]:
 
     normalized_triplets = []
     for t in triplets:
-        src, rel, trg = t["source"].strip(), t["relation"].strip(), t["target"].strip()
+        # Safely get keys, with a fallback if the LLM named it 'relationship'
+        src = t.get("source", "").strip()
+        rel = t.get("relation", t.get("relationship", "CONNECTED_TO")).strip()
+        trg = t.get("target", "").strip()
+        
+        # Drop malformed LLM outputs completely
+        if not src or not trg or not rel:
+            continue
+
         normalized_triplet = t.copy()
         normalized_triplet["source"] = entity_map.get(src, src)
+        normalized_triplet["relation"] = rel # Guarantee the key is set correctly
         normalized_triplet["target"] = entity_map.get(trg, trg)
         normalized_triplets.append(normalized_triplet)
+        
     return normalized_triplets
 
 def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_name: Optional[str] = None, project_name: str = "default_project"):
@@ -207,10 +218,10 @@ def build_knowledge_graph(chunks: List[Dict[str, Any]], llm_client, document_nam
     print(f"Pushing {len(normalized_triplets)} normalised triplets to Neo4j for project: {project_name}...")
     with driver.session() as session:
         try:
-            session.run("DROP CONSTRAINT entity_id_unique IF EXISTS")
+            session.run("DROP CONSTRAINT constraint_entity_id IF EXISTS")
         except Exception:
             pass
-        session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE")
+        session.run("CREATE CONSTRAINT IF NOT EXISTS FOR (e:Entity) REQUIRE (e.id, e.project) IS UNIQUE")
 
         for t in normalized_triplets:
             # Generic 'CONNECTED_TO' Edge to store relation
