@@ -96,19 +96,3 @@ def advanced_chunking(elements: List[Dict[str, Any]], chunk_size: int = 1000, ch
         flush_text_block(current_text_block, current_source, current_page)
         
     return chunks
-
-
-if __name__ == "__main__":
-    import json
-    with open("sample-hi-res.json", "r", encoding="utf-8") as f:
-            mock_elements = json.load(f)
-            
-    print("--- Advanced Recursive Chunking (Testing with Composite Elements) ---")
-    advanced_chunks = advanced_chunking(mock_elements, chunk_size=1000, chunk_overlap=300)
-
-    with open("advanced_chunks.json", "w", encoding="utf-8") as f:
-        json.dump(advanced_chunks, f, ensure_ascii=False, indent=4)
-    
-    for i, chunk in enumerate(advanced_chunks):
-        print(f"--- Chunk {i+1} [Type: {chunk['metadata'].get('chunk_type')}, Page: {chunk['metadata'].get('page_number')}] ---")
-        print(f"{chunk['text'][:200]}...\n" if len(chunk['text']) > 200 else f"{chunk['text']}\n\n")

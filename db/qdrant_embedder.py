@@ -3,7 +3,6 @@ import uuid
 from typing import List, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from langchain_huggingface import HuggingFaceEmbeddings
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -69,27 +68,3 @@ def upsert_chunks(client: QdrantClient, collection_name: str, chunks: List[Dict[
         points=points
     )
     print("Upsert complete!")
-
-
-if __name__ == "__main__":
-    import sys
-    import json
-
-    with open("advanced_chunks.json", "r", encoding="utf-8") as f:
-        chunks = json.load(f)
-
-    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
-    embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-    
-    try:
-        q_client = get_qdrant_client()
-        init_collection(q_client, COLLECTION_NAME)
-        upsert_chunks(q_client, COLLECTION_NAME, chunks, embedder)
-        
-        count = q_client.count(collection_name=COLLECTION_NAME)
-        print(f"Success! Collection '{COLLECTION_NAME}' now contains {count.count} vectors.")
-        
-    except Exception as e:
-        print(f"\nERROR: Could not connect to Qdrant. Is Docker running?")
-        print(f"Details: {e}")
-            

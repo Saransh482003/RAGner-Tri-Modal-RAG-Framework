@@ -1,7 +1,6 @@
 import re
 import os
 from typing import List, Dict, Any
-# from groq import Groq
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -110,25 +109,3 @@ def generate_answer(client: OpenAI, query: str, retrieved_chunks: List[Dict[str,
          print(f"Error during LLM generation: {e}")
          return "I encountered an error while trying to generate an answer."
 
-if __name__ == "__main__":
-    import os
-    import sys
-    from pathlib import Path
-    root_dir = Path(__file__).resolve().parent.parent
-    sys.path.append(str(root_dir))
-    from db.qdrant_embedder import get_qdrant_client
-    from services.retrieval_vector import retrieve_vector_context
-    
-    llm_client = initialize_llm_client()
-    q_client = get_qdrant_client()
-    COLLECTION_NAME = os.getenv("COLLECTION_NAME", "ragner_collection")
-    
-    test_query = "What is the seat of House Targaryen?"
-    
-    print(f"\nUser Question: {test_query}")
-
-    results = retrieve_vector_context(q_client, COLLECTION_NAME, test_query, bi_encoder_top_k=15, cross_encoder_top_k=3)
-    
-    if llm_client:
-        answer = generate_answer(llm_client, test_query, results)
-        print(f"Generated Answer: {answer}")

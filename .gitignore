@@ -8,3 +8,5 @@ __pycache__/
 *.py[cod]
 **/node_modules/
 !benchmarking/**/*.pdf
+*.dump
+*.snapshot

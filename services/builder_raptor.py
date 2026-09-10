@@ -228,34 +228,3 @@ def build_raptor_tree(leaf_chunks: List[Dict[str, Any]], embedder, llm_client, m
             }
             collapsed_tree.append(root_node)
     return collapsed_tree
-
-if __name__ == "__main__":
-    import os
-    import sys
-    from pathlib import Path
-    root_dir = Path(__file__).resolve().parent.parent
-    sys.path.append(str(root_dir))
-    from langchain_huggingface import HuggingFaceEmbeddings
-    
-    embedder = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
-    llm = initialize_llm_client()
-    
-    mock_leaves = [
-        {"text": "The company's revenue increased by 15% in Q1 due to strong sales in Europe.", "metadata": {"source": "doc1"}},
-        {"text": "Net income for the first quarter was $2.5 million, up from $2.0 million last year.", "metadata": {"source": "doc1"}},
-        {"text": "The new European marketing campaign launched in January was highly successful.", "metadata": {"source": "doc1"}},
-        {"text": "The CEO announced a new initiative to reduce carbon emissions by 2030.", "metadata": {"source": "doc2"}},
-        {"text": "Solar panels will be installed on all corporate headquarters by next year.", "metadata": {"source": "doc2"}},
-        {"text": "Employee retention reached an all-time high of 95% this quarter.", "metadata": {"source": "doc3"}},
-        {"text": "The HR department rolled out a new unlimited PTO policy in February.", "metadata": {"source": "doc3"}},
-    ]
-    
-    if llm:
-        final_tree = build_raptor_tree(mock_leaves, embedder, llm, max_levels=2, clustering_algo="kmeans")
-        print(final_tree)
-        
-        print("\n--- Summary Nodes Generated ---")
-        for node in final_tree:
-            print(f"\n[Level {node['metadata']['raptor_level']}] {node['text']}")
-    else:
-        print("Please set your GROQ_API_KEY to test the summarization locally.")
