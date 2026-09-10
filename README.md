@@ -1,5 +1,4 @@
-# ⚡ RAGner Framework
-**An Agentic, Plug-and-Play Retrieval-Augmented Generation (RAG) Architecture**
+![RAGner Logo](./assets/RAGner%20Logo.png)
 
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/) [![Next.js](https://img.shields.io/badge/Next.js-black?style=flat&logo=next.js)](https://nextjs.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-018bff?style=flat&logo=neo4j)](https://neo4j.com/) [![Qdrant](https://img.shields.io/badge/Qdrant-FE4155?style=flat&logo=qdrant)](https://qdrant.tech/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -13,10 +12,9 @@ By simply swapping out the source documents, RAGner can be instantly customized 
 
 ## 🚀 Production Showcase: Scaler ChatBOT
 
-To demonstrate the framework's capabilities, I deployed a customized instance of RAGner ingested specifically with technical documentation and course brochures from **Scaler**. 
+To demonstrate the framework's capabilities, I deployed a customized instance of RAGner ingested specifically with technical documentation and course brochures from [Scaler](https://www.scaler.com/). 
 
-* **Live Demo:** [🔗 scaler-chatbot-ragner.vercel.app](https://scaler-chatbot-ragner.vercel.app/) 
-* **Use Case:** A zero-hallucination agent designed to answer complex, multi-hop queries about Scaler's Forward Deployed Engineer (FDE) and Data Science programs.
+* **Live Demo:** [🔗 scaler-chatbot-ragner.vercel.app](https://scaler-chatbot-ragner.vercel.app/)
 
 ---
 
@@ -25,7 +23,7 @@ To demonstrate the framework's capabilities, I deployed a customized instance of
 Building a robust RAG system goes beyond wrapping an API call in a UI. RAGner was built to solve the core challenges of modern AI deployments: **Context Fragmentation**, **Multi-hop Reasoning**, and **Cloud Infrastructure Costs**.
 
 ### 1. Decoupled Ingestion & Retrieval
-To keep cloud hosting costs near zero while maintaining high performance, the system architecture physically separates the ingestion pipeline from the retrieval API. Heavy libraries (like `unstructured`, `scikit-learn`, `umap-learn`, and `networkx`) are used locally to parse PDFs, build RAPTOR trees, and extract graph entities. Once the vectors and graphs are pushed to the cloud, the production backend runs a highly optimized, lightweight environment, saving gigabytes of RAM.
+To keep cloud hosting costs near zero while maintaining high performance, the system architecture physically separates the ingestion pipeline from the retrieval API. Heavy libraries (like `unstructured`, `scikit-learn` and `umap-learn`) are used locally to parse PDFs, build RAPTOR trees, and extract graph entities. Once the vectors and graphs are pushed to the cloud, the production backend runs a highly optimized, lightweight environment, saving gigabytes of RAM.
 
 ### 2. Tri-Modal Retrieval Engines
 Not all queries are created equal. RAGner utilizes three distinct retrieval methodologies:
@@ -42,7 +40,7 @@ RAGner employs a smart routing layer that uses an LLM to classify user intent an
 
 ```mermaid
 %%{init: {
-  'theme': 'base',
+  'theme': 'default',
   'themeVariables': {
     'darkMode': false,
     'background': '#ffffff',
@@ -124,23 +122,22 @@ While this framework is designed to be highly customizable, the core usage pipel
 1. **Data Drop:** Raw documents (PDFs) are ingested using high-resolution parsing to preserve tables and document structure.
 2. **Intelligent Chunking:** The pipeline utilizes advanced recursive character splitting, explicitly keeping Markdown tables intact for pristine data retrieval.
 3. **Multi-Dimensional Processing:**
-* Embeddings are generated and pushed to Qdrant.
-* The RAPTOR engine clusters (via K-Means or GMM) and summarizes the text into a hierarchical tree.
-* The Knowledge Graph builder uses fuzzy logic and canonicalization to extract clean Entity-Relationship triplets into Neo4j.
+    - Embeddings are generated and pushed to Qdrant.
+    - The RAPTOR engine clusters (via K-Means or GMM) and summarizes the text into a hierarchical tree.
+    - The Knowledge Graph builder uses fuzzy logic and canonicalization to extract clean Entity-Relationship triplets into Neo4j.
 
 
 4. **Deploy:** The backend and frontend spin up, immediately ready to answer complex queries about the newly ingested corpus with strict hallucination guardrails.
-
-*If you are interested in deploying a custom instance of RAGner for your enterprise data, please reach out via the contact information below.*
-
 ---
+
+***If you are interested in deploying a custom instance of RAGner for your enterprise data, please reach out via the contact information below.***
+
 
 ## 👨‍💻 Developer
 
-**Saransh Saini**
-
-Data Scientist | IIT Madras, BS Data Science
-
-* [LinkedIn](https://www.linkedin.com/in/saranshsaini48/)
-* [GitHub](https://github.com/Saransh482003)
-* [Personal Website](https://www.saranshsaini.in/)
+**Saransh Saini** | *AI Engineer*
+[![Email](https://img.shields.io/badge/Email-D14836?style=flat&logo=gmail&logoColor=white)](mailto:saransh.saini.ai@gmail.com) 
+[![Phone](https://img.shields.io/badge/Phone-25D366?style=flat&logo=whatsapp&logoColor=white)](tel:+918178703402)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/saranshsaini48/) 
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/Saransh482003) 
+[![Portfolio](https://img.shields.io/badge/Website-Portfolio-2563EB?style=flat)](https://www.saranshsaini.in/) 
