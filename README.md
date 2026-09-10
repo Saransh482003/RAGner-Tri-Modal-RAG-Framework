@@ -136,6 +136,7 @@ While this framework is designed to be highly customizable, the core usage pipel
 ## 👨‍💻 Developer
 
 **Saransh Saini** | *AI Engineer*
+
 [![Email](https://img.shields.io/badge/Email-D14836?style=flat&logo=gmail&logoColor=white)](mailto:saransh.saini.ai@gmail.com) 
 [![Phone](https://img.shields.io/badge/Phone-25D366?style=flat&logo=whatsapp&logoColor=white)](tel:+918178703402)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/saranshsaini48/) 
