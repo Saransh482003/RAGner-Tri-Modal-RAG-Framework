@@ -41,6 +41,7 @@ RAGner employs a smart routing layer that uses an LLM to classify user intent an
 ## 🏗️ System Architecture & Data Flow
 
 ```mermaid
+%%{init: {'theme': 'default', 'themeVariables': { 'background': '#ffffff', 'primaryTextColor': '#000000', 'edgeLabelBackground': '#ffffff'}}}%%
 graph TD
     %% Define crisp color palettes for the different layers
     classDef frontend fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
