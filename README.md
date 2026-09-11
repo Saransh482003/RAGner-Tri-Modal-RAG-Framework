@@ -10,15 +10,16 @@ By simply swapping out the source documents, RAGner can be instantly customized 
 
 ---
 
-## 🚀 Production Showcase: Scaler ChatBOT
+## # Production Showcase: Scaler ChatBOT
 
 To demonstrate the framework's capabilities, I deployed a customized instance of RAGner ingested specifically with technical documentation and course brochures from [Scaler](https://www.scaler.com/). 
 
-* **Live Demo:** [🔗 scaler-chatbot-ragner.vercel.app](https://scaler-chatbot-ragner.vercel.app/)
+**Live Demo:** [🔗 scaler-chatbot-ragner.vercel.app](https://scaler-chatbot-ragner.vercel.app/)
 
+![Scaler-BOT Logo](./assets/Scaler-BOT.png)
 ---
 
-## 🧠 Architectural Thought Process
+## # Architectural Thought Process
 
 Building a robust RAG system goes beyond wrapping an API call in a UI. RAGner was built to solve the core challenges of modern AI deployments: **Context Fragmentation**, **Multi-hop Reasoning**, and **Cloud Infrastructure Costs**.
 
@@ -36,7 +37,7 @@ RAGner employs a smart routing layer that uses an LLM to classify user intent an
 
 ---
 
-## 🏗️ System Architecture & Data Flow
+## # System Architecture & Data Flow
 
 ```mermaid
 %%{init: {
@@ -101,7 +102,7 @@ graph TD
 
 ---
 
-## ⚙️ Models & Technologies Used
+## # Models & Technologies Used
 
 RAGner utilizes a state-of-the-art API stack to completely offload heavy ML workloads from the application server, allowing the backend to run on highly efficient, low-memory cloud tiers while delivering top-tier AI reasoning.
 
@@ -115,7 +116,7 @@ RAGner utilizes a state-of-the-art API stack to completely offload heavy ML work
 
 ---
 
-## 🛠️ A Peek into Usage (For Clients)
+## # A Peek into Usage (For Clients)
 
 While this framework is designed to be highly customizable, the core usage pipeline is simple and plug-and-play:
 
@@ -133,7 +134,7 @@ While this framework is designed to be highly customizable, the core usage pipel
 ***If you are interested in deploying a custom instance of RAGner for your enterprise data, please reach out via the contact information below.***
 
 
-## 👨‍💻 Developer
+## # Developer
 
 **Saransh Saini** | *AI Engineer*
 
