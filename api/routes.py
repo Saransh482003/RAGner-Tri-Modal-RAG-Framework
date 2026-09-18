@@ -23,6 +23,7 @@ q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
 MODEL_NAME = os.getenv("GENERATION_MODEL", "openrouter/free")
 
+MASTER_COLLECTION_NAME = "ragner_master_collection"
 
 
 class QueryRequest(BaseModel):
@@ -40,12 +41,15 @@ class RebuildRequest(BaseModel):
 
 def get_existing_chunks_from_qdrant(
     q_client, 
-    collection_name: str, 
+    project_name: str, 
     doc_name: Optional[str] = None, 
     chunk_type: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Retrieves already stored chunks from Qdrant without re-reading PDFs."""
-    filter_conditions = []
+
+    filter_conditions = [
+        FieldCondition(key="project_name", match=MatchValue(value=project_name))
+    ]
     if doc_name:
         filter_conditions.append(FieldCondition(key="source", match=MatchValue(value=doc_name)))
     if chunk_type:
@@ -54,7 +58,7 @@ def get_existing_chunks_from_qdrant(
     q_filter = Filter(must=filter_conditions) if filter_conditions else None
 
     points, _ = q_client.scroll(
-        collection_name=collection_name,
+        collection_name=MASTER_COLLECTION_NAME,
         scroll_filter=q_filter,
         limit=1000,
         with_payload=True,
@@ -90,7 +94,7 @@ def execute_pipeline_stages(
                 ]
                 if summary_chunks:
                     print(f"[Stage: RAPTOR] Upserting {len(summary_chunks)} summaries to Qdrant...")
-                    upsert_chunks(q_client, project_name, summary_chunks, embedder)
+                    upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, summary_chunks, embedder)
             except Exception as e:
                 print(f"[Stage: RAPTOR Failed] Error on {doc_name}: {e}")
                 
@@ -153,7 +157,7 @@ async def upload_document(
 
             base_chunks = advanced_chunking(elements)
             if base_chunks:
-                upsert_chunks(q_client, project_name, base_chunks, embedder)
+                upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, base_chunks, embedder)
                 total_base_chunks += len(base_chunks)
                 doc_chunks_map[file.filename] = base_chunks
 
@@ -237,7 +241,9 @@ async def query_documents(request: Request, body: QueryRequest):
     try:
         embedder = request.app.state.embedder
         reranker = request.app.state.reranker
-        active_collection = body.project_name
+
+        active_collection = MASTER_COLLECTION_NAME
+        project_filter = body.project_name
 
         active_strategy = body.strategy
         if active_strategy == "auto":
@@ -255,6 +261,7 @@ async def query_documents(request: Request, body: QueryRequest):
                     reranker=reranker,
                     strategy="vanilla",
                     document_source=body.document_name,
+                    project_name=project_filter,
                     bi_encoder_top_k=15, 
                     cross_encoder_top_k=5
                 )
@@ -267,6 +274,7 @@ async def query_documents(request: Request, body: QueryRequest):
                 reranker=reranker,
                 strategy=active_strategy,
                 document_source=body.document_name,
+                project_name=project_filter,
                 bi_encoder_top_k=15, 
                 cross_encoder_top_k=5
             )
