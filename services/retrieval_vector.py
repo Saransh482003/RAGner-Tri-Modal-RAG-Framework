@@ -6,7 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def retrieve_vector_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, strategy: str = "vanilla", document_source: Optional[str] = None, bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
+def retrieve_vector_context(client: QdrantClient, collection_name: str, query: str, embedder, reranker, 
+                            strategy: str = "vanilla", document_source: Optional[str] = None, project_name=None,
+                            bi_encoder_top_k: int = 15, cross_encoder_top_k: int = 3) -> List[Dict[str, Any]]:
     """
     Takes a user query, embeds it, searches Qdrant for a broad set of matches,
     and then uses a Cross-Encoder to strictly rerank them.
@@ -15,6 +17,13 @@ def retrieve_vector_context(client: QdrantClient, collection_name: str, query: s
 
     # If Vanilla is selected, filter is set only for text and table chunks.
     filter_conditions = []
+    if project_name:
+        filter_conditions.append(
+            FieldCondition(
+                key="project_name",
+                match=MatchValue(value=project_name)
+            )
+        )
     if strategy == "vanilla":
         filter_conditions.append(
             FieldCondition(
@@ -61,7 +70,8 @@ def retrieve_vector_context(client: QdrantClient, collection_name: str, query: s
             "metadata": {
                 "page_number": payload.get("page_number"),
                 "source": payload.get("source"),
-                "chunk_type": payload.get("chunk_type")
+                "chunk_type": payload.get("chunk_type"),
+                "project_name": payload.get("project_name")
             }
         })
 
