@@ -23,6 +23,7 @@ q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
 MODEL_NAME = os.getenv("GENERATION_MODEL", "openrouter/free")
 
+# The single multi-tenant master collection
 MASTER_COLLECTION_NAME = "ragner_master_collection"
 
 
@@ -30,10 +31,10 @@ class QueryRequest(BaseModel):
     query: str
     strategy: str = "auto"
     document_name: Optional[str] = None
-    project_name: str = "default_project"
+    project_name: Optional[str] = None
 
 class RebuildRequest(BaseModel):
-    project_name: str = "default_project"
+    project_name: Optional[str] = None
     document_name: Optional[str] = None
     build_raptor: bool = False
     build_graph: bool = True
@@ -46,7 +47,6 @@ def get_existing_chunks_from_qdrant(
     chunk_type: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """Retrieves already stored chunks from Qdrant without re-reading PDFs."""
-
     filter_conditions = [
         FieldCondition(key="project_name", match=MatchValue(value=project_name))
     ]
@@ -101,11 +101,10 @@ def execute_pipeline_stages(
         # --- STAGE 2: KNOWLEDGE GRAPH CONSTRUCTION ---
         if build_graph:
             try:
-                # If RAPTOR didn't run in this pass, look for existing summaries in Qdrant
                 if not summary_chunks:
                     print(f"[Stage: GraphRAG] Checking Qdrant for existing summaries for {doc_name}...")
                     existing_summaries = get_existing_chunks_from_qdrant(
-                        q_client, collection_name=project_name, doc_name=doc_name, chunk_type="raptor_summary"
+                        q_client, project_name=project_name, doc_name=doc_name, chunk_type="raptor_summary"
                     )
                     summary_chunks = existing_summaries if existing_summaries else base_chunks
 
@@ -138,7 +137,8 @@ async def upload_document(
     total_base_chunks = 0
     doc_chunks_map = {}
 
-    init_collection(q_client, project_name, vector_size=1536)
+    # FIX: Initialize the master collection, NOT a separate collection per project
+    init_collection(q_client, MASTER_COLLECTION_NAME, vector_size=1536)
     
     for file in files:
         if not file.filename.endswith('.pdf'):
@@ -175,7 +175,7 @@ async def upload_document(
         )
 
     return {
-        "message": f"Processed {len(files)} document(s). Base chunks stored in project '{project_name}'.",
+        "message": f"Processed {len(files)} document(s). Base chunks stored under master collection with project tag '{project_name}'.",
         "stages_queued": {
             "raptor": build_raptor,
             "graph": build_graph
@@ -197,10 +197,10 @@ async def rebuild_pipeline_stage(
     """
     embedder = request.app.state.embedder
     
-    # Retrieve base chunks already saved in Qdrant
+    # FIX: Pass project_name properly
     base_chunks = get_existing_chunks_from_qdrant(
         q_client, 
-        collection_name=body.project_name, 
+        project_name=body.project_name, 
         doc_name=body.document_name, 
         chunk_type="text"
     )
@@ -250,7 +250,8 @@ async def query_documents(request: Request, body: QueryRequest):
             active_strategy = route_query(llm_client, body.query)
 
         if active_strategy == "graph":
-            retrieved_chunks = retrieve_graph_context(body.query, llm_client, project_name=active_collection)
+            # FIX: Pass project_filter to Neo4j, NOT the Qdrant collection name
+            retrieved_chunks = retrieve_graph_context(body.query, llm_client, project_name=project_filter)
 
             if not retrieved_chunks:
                 retrieved_chunks = retrieve_vector_context(

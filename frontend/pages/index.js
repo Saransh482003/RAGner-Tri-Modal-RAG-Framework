@@ -7,15 +7,8 @@ import {
   Network, Zap, ChevronDown, ChevronUp, Loader2, RefreshCw
 } from "lucide-react";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 const SourceCard = ({ source }) => {
   const [expanded, setExpanded] = useState(false);
@@ -73,8 +66,10 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [strategy, setStrategy] = useState("auto");
   
-  // New Workspace & Pipeline State
-  const [projectName, setProjectName] = useState("portfolio-demo");
+  // NEW: Multi-Tenant Workspace & Pipeline State
+  const [collectionName, setCollectionName] = useState("ragner_master_collection");
+  const [projectName, setProjectName] = useState("");
+  
   const [buildRaptor, setBuildRaptor] = useState(true);
   const [buildGraph, setBuildGraph] = useState(true);
   const [isRebuilding, setIsRebuilding] = useState(false);
@@ -98,13 +93,14 @@ export default function Home() {
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
-    setStatusMessage("Uploading and extracting base chunks...");
+    setStatusMessage(`Uploading chunks to master collection '${collectionName}'...`);
     
     const formData = new FormData();
     Array.from(files).forEach(file => formData.append("files", file));
     
-    // Append new granular build configurations
-    formData.append("project_name", projectName);
+    // Append multi-tenant granular build configurations
+    formData.append("collection_name", collectionName); // Sent to backend master collection
+    formData.append("project_name", projectName);       // Sent to backend payload metadata tag
     formData.append("build_raptor", buildRaptor.toString());
     formData.append("build_graph", buildGraph.toString());
 
@@ -119,7 +115,7 @@ export default function Home() {
         setUploadedDocs(prev => Array.from(new Set([...prev, ...data.documents])));
         setStatusMessage(data.message || "Upload complete!");
         
-        let successMsg = `✅ Successfully processed ${files.length} document(s) into workspace '${projectName}'.`;
+        let successMsg = `✅ Successfully processed ${files.length} document(s) into global collection '${collectionName}', tagged for project '${projectName}'.`;
         if (data.stages_queued?.raptor || data.stages_queued?.graph) {
            successMsg += ` Background tasks queued.`;
         }
@@ -146,6 +142,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          collection_name: collectionName,
           project_name: projectName,
           document_name: selectedDoc === "all" ? null : selectedDoc,
           build_raptor: stage === "raptor" || stage === "all",
@@ -185,7 +182,8 @@ export default function Home() {
         body: JSON.stringify({
           query: userQuery,
           strategy: strategy,
-          project_name: projectName, // Pass active workspace to query router
+          collection_name: collectionName, 
+          project_name: projectName === "master" ? null : projectName, // Allows querying global graph if set to "master"
           document_name: selectedDoc === "all" ? null : selectedDoc
         }),
       });
@@ -230,19 +228,35 @@ export default function Home() {
 
           <div className={styles.sidebarContent}>
             
-            {/* Workspace Selection */}
-            <div style={{ marginBottom: "24px" }}>
-              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#4b5563", marginBottom: "8px", textTransform: "uppercase" }}>
-                Active Workspace
-              </label>
-              <input
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-                placeholder="e.g. portfolio-demo"
-                className={styles.textInput}
-                style={{ width: "100%", padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.875rem" }}
-              />
+            {/* Multi-Tenant Configuration */}
+            <div style={{ marginBottom: "24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#4b5563", marginBottom: "4px", textTransform: "uppercase" }}>
+                  Master Collection
+                </label>
+                <input
+                  type="text"
+                  value={collectionName}
+                  onChange={(e) => setCollectionName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="e.g. ragner_master_collection"
+                  className={styles.textInput}
+                  style={{ width: "100%", padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.875rem" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#4b5563", marginBottom: "4px", textTransform: "uppercase" }}>
+                  Project Slug (Tag)
+                </label>
+                <input
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                  placeholder="e.g. nvidia"
+                  className={styles.textInput}
+                  style={{ width: "100%", padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: "6px", fontSize: "0.875rem" }}
+                />
+              </div>
             </div>
 
             <h2 className={styles.sectionTitle}>Ingestion Pipeline</h2>
@@ -259,7 +273,7 @@ export default function Home() {
                 />
                 <label htmlFor="file-upload" style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
                   <Paperclip size={20} color="#9ca3af" />
-                  <span style={{ fontSize: "0.875rem", color: "#4b5563", marginTop: "8px" }}>
+                  <span style={{ fontSize: "0.875rem", color: "#4b5563", marginTop: "8px", textAlign: "center" }}>
                     {files && files.length > 0 ? `${files.length} file(s) selected` : "Select PDF documents"}
                   </span>
                 </label>
@@ -332,7 +346,7 @@ export default function Home() {
             {/* Active Document Context */}
             {uploadedDocs.length > 0 && (
               <div style={{ marginTop: "32px" }}>
-                <h2 className={styles.sectionTitle}>Global Corpus</h2>
+                <h2 className={styles.sectionTitle}>Session Corpus</h2>
                 <ul className={styles.docList}>
                   {uploadedDocs.map((doc, idx) => (
                     <li key={idx} className={styles.docItem}>
@@ -353,7 +367,10 @@ export default function Home() {
               <div className={styles.emptyState}>
                 <Network size={48} color="#d1d5db" style={{ marginBottom: "16px" }} />
                 <h2 style={{ fontSize: "1.25rem", fontWeight: 500, color: "#4b5563", margin: 0 }}>Workspace Initialized</h2>
-                <p style={{ fontSize: "0.875rem", marginTop: "8px", color: "#6b7280" }}>Upload documents or query an existing project workspace to begin.</p>
+                <p style={{ fontSize: "0.875rem", marginTop: "8px", color: "#6b7280", textAlign: "center" }}>
+                  Targeting Master Collection: <strong>{collectionName}</strong><br/>
+                  Filtered via Tag: <strong>{projectName}</strong>
+                </p>
               </div>
             ) : (
               messages.map((msg, idx) => {
