@@ -2,6 +2,7 @@ import os
 import uuid
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
@@ -11,6 +12,7 @@ from services.builder_raptor import build_raptor_tree
 from services.retrieval_vector import retrieve_vector_context
 from services.builder_graph import build_knowledge_graph
 from services.retrieval_graph import retrieve_graph_context
+from services.exporter import build_export_zip
 from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
 from services.generation import initialize_llm_client, generate_answer
 from services.query_router import route_query
@@ -288,3 +290,20 @@ async def query_documents(request: Request, body: QueryRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/export/{project_name}")
+async def export_project(project_name: str):
+    """
+    Bundles this project's Qdrant vectors/payloads and Neo4j triplets into a downloadable zip.
+    Gated client-side behind the one-time export purchase flow (see ExportModal).
+    """
+    zip_buffer, point_count, triplet_count = build_export_zip(q_client, MASTER_COLLECTION_NAME, project_name)
+
+    if point_count == 0 and triplet_count == 0:
+        raise HTTPException(status_code=404, detail=f"No data found for project '{project_name}'.")
+
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'},
+    )
