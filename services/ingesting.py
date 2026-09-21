@@ -1,12 +1,18 @@
 import os
 from typing import Dict, List, Any
 import json
-from unstructured.partition.pdf import partition_pdf
-from unstructured.cleaners.core import clean, replace_unicode_quotes
+from unstructured_client import UnstructuredClient
+from unstructured_client.models import shared
+from unstructured.cleaners.core import replace_unicode_quotes
 from markdownify import markdownify as md
 from dotenv import load_dotenv
 
 load_dotenv()
+
+client = UnstructuredClient(
+    api_key=os.getenv("UNSTRUCTURED_TRANSFORM_API_KEY"),
+    server_url="https://transform.unstructured.io",
+)
 
 def clean_text(text: str) -> str:
     """
@@ -20,42 +26,54 @@ def clean_text(text: str) -> str:
 
 def parse_pdf_document(file_path: str, strategy: str = "fast") -> List[Dict[str, Any]]:
     """
-    Parses a PDF document and returns a list of dictionaries containing the text content.
+    Parses a PDF document using the Unstructured API and returns a list of dictionaries containing the text content.
     Args:
         file_path (str): The path to the PDF file.
         strategy (str): The parsing strategy to use.
     """
-    elements = partition_pdf(
-        filename=file_path,
+    print(f"Uploading {os.path.basename(file_path)} to Unstructured API...")
+
+    with open(file_path, "rb") as f:
+        files = shared.Files(
+            content=f.read(),
+            file_name=os.path.basename(file_path),
+        )
+
+    req = shared.PartitionParameters(
+        files=files,
         strategy=strategy,
         chunking_strategy="by_title",
         multipage_sections=True,
         max_characters=2000,
         new_after_n_chars=1500,
         combine_text_under_n_chars=500,
-        skip_infer_table_types=[],
-        infer_table_structure=True
+        pdf_infer_table_structure=True
     )
 
+    try:
+        res = client.general.partition(req)
+    except Exception as e:
+        print(f"❌ Failed to process {file_path} via Unstructured API: {str(e)}")
+        raise e
+
     extracted_content = []
-    for element in elements:
-        element_type = type(element).__name__
+    for element_dict in res.elements:
+        element_type = element_dict.get("type", "")
 
         if element_type in ["Image", "FigureCaption"]:
             continue
 
-        element.apply(replace_unicode_quotes)
-
-        element_dict = element.to_dict()
-        element_dict["text"] = clean_text(element_dict["text"])
+        original_text = element_dict.get("text", "")
+        element_dict["text"] = clean_text(original_text)
 
         if "Table" in element_type:
             html_table = element_dict.get("metadata", {}).get("text_as_html", "")
             if html_table:
                 element_dict["table_html"] = html_table
-                element_dict["table_markdown"] = md(html_table) # Converting the HTML table to Markdown format; it is better while chunking
+                element_dict["table_markdown"] = md(html_table) # Crucial for clean LLM extraction
 
         extracted_content.append(element_dict)
 
+    print(f"✅ Successfully processed and cleaned {len(extracted_content)} elements.")
     return extracted_content
 

@@ -113,14 +113,11 @@ export default function Sidebar({
       <div className={styles.sidebarContent}>
         <div className={styles.fieldGroup}>
           <div className={styles.field}>
-            <label className={styles.fieldLabel}>Master Collection</label>
-            <input
-              type="text"
-              value={collectionName}
-              onChange={(e) => setCollectionName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-              placeholder="e.g. ragner_master_collection"
-              className={styles.textInputSm}
-            />
+            <label className={styles.fieldLabel}>Master Collection (Fixed)</label>
+            <div className={styles.staticBadgeSm}>
+              <span className={styles.staticBadgeDot} />
+              {collectionName || "ragner_master_collection"}
+            </div>
           </div>
 
           <div className={styles.field}>

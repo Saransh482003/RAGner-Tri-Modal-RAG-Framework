@@ -1,4 +1,5 @@
-import { Send, Network, Loader2, Lock } from "lucide-react";
+import { useState } from "react";
+import { Send, Network, Loader2, Lock, ChevronDown, ChevronUp, Sparkles, HelpCircle } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 import styles from "@/styles/Home.module.css";
 
@@ -18,7 +19,27 @@ export default function ChatPanel({
   onSubmit,
   locked,
   onUpgradeClick,
+  sampleQuestions = [],
+  onSelectSampleQuestion,
 }) {
+  const [showQuestions, setShowQuestions] = useState(true);
+
+  // If there are messages, default to collapsed unless toggled by user
+  const hasMessages = messages.length > 0;
+  const isQuestionsVisible = hasMessages ? !showQuestions : showQuestions;
+
+  const handleToggle = () => {
+    setShowQuestions((prev) => !prev);
+  };
+
+  const handleQuestionClick = (q) => {
+    if (onSelectSampleQuestion) {
+      onSelectSampleQuestion(q);
+    } else {
+      setInput(q);
+    }
+  };
+
   return (
     <div className={styles.chatArea}>
       <div className={styles.messagesWindow}>
@@ -53,10 +74,65 @@ export default function ChatPanel({
       </div>
 
       <div className={styles.inputArea}>
+        {sampleQuestions && sampleQuestions.length > 0 && (
+          <div className={styles.sampleQuestionsContainer}>
+            {hasMessages ? (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleToggle}
+                  className={styles.sampleQuestionsToggle}
+                >
+                  <Sparkles size={14} />
+                  <span>Sample Questions ({sampleQuestions.length})</span>
+                  {showQuestions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                {showQuestions && (
+                  <div className={styles.sampleQuestionsList} style={{ marginTop: 8 }}>
+                    {sampleQuestions.map((q, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleQuestionClick(q)}
+                        className={styles.sampleQuestionBtn}
+                        disabled={isQuerying || locked}
+                      >
+                        <HelpCircle size={14} className={styles.sampleQuestionIcon} />
+                        <span>{q}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, fontSize: "0.78rem", fontWeight: 700, color: "var(--primary-dark)" }}>
+                  <Sparkles size={14} />
+                  <span>Suggested Prompts for this Corpus:</span>
+                </div>
+                <div className={styles.sampleQuestionsList}>
+                  {sampleQuestions.map((q, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleQuestionClick(q)}
+                      className={styles.sampleQuestionBtn}
+                      disabled={isQuerying || locked}
+                    >
+                      <HelpCircle size={14} className={styles.sampleQuestionIcon} />
+                      <span>{q}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {locked ? (
           <div className={styles.lockOverlay}>
             <Lock size={18} />
-            <span>You have reached the free trial limit for this workspace.</span>
+            <span>You have reached the trial limit for this workspace.</span>
             <button className={styles.lockUpgradeBtn} onClick={onUpgradeClick}>
               Upgrade to continue
             </button>
@@ -111,3 +187,4 @@ export default function ChatPanel({
     </div>
   );
 }
+

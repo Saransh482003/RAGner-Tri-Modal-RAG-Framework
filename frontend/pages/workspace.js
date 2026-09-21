@@ -9,6 +9,7 @@ import EnterpriseModal from "@/components/modals/EnterpriseModal";
 import ExportModal from "@/components/modals/ExportModal";
 import { useUsageTracker } from "@/lib/useUsageTracker";
 import { Database, Home as HomeIcon, CreditCard, Sparkles, Compass } from "lucide-react";
+import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
 import styles from "@/styles/Home.module.css";
 
 const API_BASE = "http://localhost:8000/api/v1";
@@ -19,12 +20,18 @@ export default function WorkspacePage() {
   const [input, setInput] = useState("");
   const [strategy, setStrategy] = useState("auto");
 
-  const [collectionName, setCollectionName] = useState("ragner_master_collection");
+  const [collectionName] = useState(MASTER_COLLECTION);
   const [projectName, setProjectName] = useState("");
+
+  // Check if matching company exists in COMPANY_DIRECTORY for sample questions & prefilled docs
+  const matchingCompany = Object.values(COMPANY_DIRECTORY).find(
+    (c) => c.projectName === projectName || c.slug === projectName || (projectName === "" && c.projectName === null)
+  );
+
+  const sampleQuestions = matchingCompany?.sampleQuestions || [];
 
   useEffect(() => {
     if (router.isReady) {
-      if (router.query.collection) setCollectionName(router.query.collection);
       if (router.query.project) setProjectName(router.query.project);
     }
   }, [router.isReady, router.query]);
@@ -132,17 +139,15 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleQuery = async (e) => {
-    e.preventDefault();
-    if (!input.trim() || isQuerying) return;
+  const handleQueryDirect = async (queryText) => {
+    if (!queryText.trim() || isQuerying) return;
     if (usage.questionsLocked) {
       openUpgradeModal();
       return;
     }
 
-    const userQuery = input.trim();
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userQuery }]);
+    setMessages((prev) => [...prev, { role: "user", content: queryText }]);
     setIsQuerying(true);
     usage.incrementQuestions();
 
@@ -151,7 +156,7 @@ export default function WorkspacePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          query: userQuery,
+          query: queryText,
           strategy: strategy,
           collection_name: collectionName,
           project_name: projectName === "master" ? null : projectName,
@@ -179,6 +184,12 @@ export default function WorkspacePage() {
     } finally {
       setIsQuerying(false);
     }
+  };
+
+  const handleQuery = async (e) => {
+    e?.preventDefault?.();
+    if (!input.trim()) return;
+    handleQueryDirect(input.trim());
   };
 
   return (
@@ -239,7 +250,6 @@ export default function WorkspacePage() {
         <div className={styles.container}>
           <Sidebar
             collectionName={collectionName}
-            setCollectionName={setCollectionName}
             projectName={projectName}
             setProjectName={setProjectName}
             buildRaptor={buildRaptor}
@@ -274,6 +284,8 @@ export default function WorkspacePage() {
             onSubmit={handleQuery}
             locked={usage.questionsLocked}
             onUpgradeClick={openUpgradeModal}
+            sampleQuestions={sampleQuestions}
+            onSelectSampleQuestion={handleQueryDirect}
           />
         </div>
       </div>
