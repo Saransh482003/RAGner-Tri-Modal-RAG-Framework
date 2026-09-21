@@ -17,9 +17,9 @@ import {
   Layers,
 } from "lucide-react";
 import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
+import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
 
-const API_BASE = "http://localhost:8000/api/v1";
 const EXPLORE_QUESTION_LIMIT = 10;
 
 export default function ExploreBotPage() {

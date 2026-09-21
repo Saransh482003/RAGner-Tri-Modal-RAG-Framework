@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PackageOpen, Check, Loader2, Download } from "lucide-react";
 import Modal from "./Modal";
 import { EXPORT_PRICE_USD } from "@/lib/limits";
+import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
 
 const CONTENTS = [
@@ -20,7 +21,7 @@ export default function ExportModal({ open, onClose, projectName }) {
       // verification before calling the export endpoint.
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const response = await fetch(`http://localhost:8000/api/v1/export/${encodeURIComponent(projectName)}`);
+      const response = await fetch(`${API_BASE}/export/${encodeURIComponent(projectName)}`);
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || "Export failed");

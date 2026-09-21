@@ -10,9 +10,8 @@ import ExportModal from "@/components/modals/ExportModal";
 import { useUsageTracker } from "@/lib/useUsageTracker";
 import { Database, Home as HomeIcon, CreditCard, Sparkles, Compass } from "lucide-react";
 import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
+import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
-
-const API_BASE = "http://localhost:8000/api/v1";
 
 export default function WorkspacePage() {
   const router = useRouter();
