@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = UnstructuredClient(
-    api_key=os.getenv("UNSTRUCTURED_TRANSFORM_API_KEY"),
+    api_key_auth=os.getenv("UNSTRUCTURED_TRANSFORM_API_KEY"),
     server_url="https://transform.unstructured.io",
 )
 
