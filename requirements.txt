@@ -1,5 +1,5 @@
-unstructured[pdf]
-unstructured-inference
+unstructured
+unstructured-client
 fastapi
 pydantic
 qdrant-client
@@ -7,11 +7,9 @@ langchain-text-splitters
 markdownify
 python-dotenv
 uvicorn
-streamlit
 umap-learn 
 scikit-learn 
 numpy
 openai
 neo4j
 rapidfuzz
-python-dotenv
