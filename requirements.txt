@@ -1,5 +1,6 @@
 unstructured
 unstructured-client
+python-multipart
 fastapi
 pydantic
 qdrant-client
