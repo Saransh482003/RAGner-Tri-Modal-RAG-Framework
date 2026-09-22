@@ -16,6 +16,8 @@ import {
   PRO_MAX_TOTAL_PAGES,
   PRO_MAX_WORKSPACES,
   EXPORT_PRICE_USD,
+  LEMON_STARTER_URL,
+  LEMON_PRO_URL,
 } from "@/lib/limits";
 import styles from "@/styles/Pricing.module.css";
 
@@ -130,9 +132,14 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <Link href="/workspace" className={styles.btnSecondary}>
+            <a
+              href={LEMON_STARTER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.btnSecondary}
+            >
               Start Starter Plan
-            </Link>
+            </a>
           </div>
 
           {/* TIER 3: PRO DEVELOPER ($79/mo — POPULAR) */}
@@ -174,10 +181,15 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <Link href="/workspace" className={styles.btnPrimary}>
+            <a
+              href={LEMON_PRO_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.btnPrimary}
+            >
               <span>Upgrade to Pro</span>
               <ArrowRight size={16} />
-            </Link>
+            </a>
           </div>
 
           {/* TIER 4: ENTERPRISE (CUSTOM DEPLOYMENT) */}

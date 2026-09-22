@@ -176,3 +176,27 @@ def record_user_activity(email: str, new_pages: int = 0, new_queries: int = 0, n
         conn.commit()
 
         return True, "Success"
+
+def upgrade_user_tier(email: str, tier: str) -> bool:
+    """Updates user tier upon payment confirmation."""
+    norm_email = email.strip().lower()
+    is_admin = is_admin_email(norm_email)
+    assigned_tier = "admin_unrestricted" if is_admin else tier
+    workspaces = 999999 if is_admin else (5 if tier == "pro" else 1)
+
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT id FROM users WHERE email = ?", (norm_email,))
+        if not c.fetchone():
+            sync_or_create_user(f"usr_{norm_email.replace('@', '_').replace('.', '_')}", norm_email)
+        
+        c.execute("""
+            UPDATE users
+            SET tier = ?,
+                workspaces_allowed = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE email = ?
+        """, (assigned_tier, workspaces, norm_email))
+        conn.commit()
+        return True
+

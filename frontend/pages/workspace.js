@@ -336,7 +336,11 @@ export default function WorkspacePage() {
         <EnterpriseModal reason={enterpriseReason} onClose={closeModal} />
       )}
       {activeModal === "export" && (
-        <ExportModal projectName={projectName || "default_project"} onClose={closeModal} />
+        <ExportModal
+          projectName={projectName || "default_project"}
+          onClose={closeModal}
+          isPro={usage.isPro}
+        />
       )}
     </>
   );

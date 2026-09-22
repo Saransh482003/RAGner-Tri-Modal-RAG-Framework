@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from utils.validators import validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
-from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, ADMIN_EMAILS
+from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, upgrade_user_tier, ADMIN_EMAILS
 from services.pipeline import execute_pipeline_stages, get_existing_chunks_from_qdrant
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
@@ -153,6 +153,36 @@ async def get_user_status(email: str):
         }
     user["is_admin"] = user.get("role") == "admin"
     return user
+
+@router.post("/auth/webhook/lemonsqueezy")
+async def lemonsqueezy_webhook(request: Request):
+    """
+    Webhook endpoint for Lemon Squeezy to automatically upgrade user tiers.
+    Handles 'order_created' and 'subscription_created' events.
+    """
+    try:
+        payload = await request.json()
+        event_name = payload.get("meta", {}).get("event_name", "")
+        data = payload.get("data", {})
+        attributes = data.get("attributes", {})
+        customer_email = attributes.get("user_email") or attributes.get("customer_email")
+
+        if not customer_email:
+            return {"status": "ignored", "reason": "no email found in webhook payload"}
+
+        # Inspect custom data or order total to match the tier
+        variant_name = (attributes.get("variant_name") or attributes.get("first_order_item", {}).get("variant_name") or "").lower()
+        order_name = (attributes.get("order_number") or "").lower()
+
+        # Default upgrade to pro if pro or 79, else starter
+        new_tier = "starter"
+        if "pro" in variant_name or attributes.get("total", 0) >= 7000:
+            new_tier = "pro"
+
+        upgrade_user_tier(customer_email, new_tier)
+        return {"status": "success", "email": customer_email, "tier": new_tier, "event": event_name}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 @router.post("/query")
 async def query_documents(request: Request, body: QueryRequest):

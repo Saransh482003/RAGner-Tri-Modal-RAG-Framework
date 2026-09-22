@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { PackageOpen, Check, Loader2, Download } from "lucide-react";
+import { PackageOpen, Check, Loader2, Download, ExternalLink } from "lucide-react";
 import Modal from "./Modal";
-import { EXPORT_PRICE_USD } from "@/lib/limits";
+import { EXPORT_PRICE_USD, LEMON_EXPORT_URL } from "@/lib/limits";
 import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
 
@@ -11,16 +11,12 @@ const CONTENTS = [
   "neo4j_import.cypher -- ready-to-run MERGE statements",
 ];
 
-export default function ExportModal({ open, onClose, projectName }) {
+export default function ExportModal({ open, onClose, projectName, isPro = false }) {
   const [phase, setPhase] = useState("pitch"); // pitch -> processing -> done -> error
 
-  const handlePurchase = async () => {
+  const handleFreeDownload = async () => {
     setPhase("processing");
     try {
-      // SIMULATED CHECKOUT -- swap this for a real Stripe Checkout + payment
-      // verification before calling the export endpoint.
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       const response = await fetch(`${API_BASE}/export/${encodeURIComponent(projectName)}`);
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -58,9 +54,8 @@ export default function ExportModal({ open, onClose, projectName }) {
           </div>
           <h3 className={styles.modalTitle}>Export your raw pipeline data</h3>
           <p className={styles.modalSubtitle}>
-            Just want the Qdrant vectors and Neo4j graph for project{" "}
-            <strong>{projectName || "this workspace"}</strong>? Get a zip with
-            everything, ready to import into your own stack.
+            Want the raw Qdrant vectors and Neo4j graph for project{" "}
+            <strong>{projectName || "this workspace"}</strong>? Download everything packaged into an import-ready zip bundle.
           </p>
 
           <ul className={styles.perkList}>
@@ -72,14 +67,42 @@ export default function ExportModal({ open, onClose, projectName }) {
             ))}
           </ul>
 
-          <div className={styles.priceCard}>
-            <span className={styles.priceAmount}>${EXPORT_PRICE_USD}</span>
-            <span className={styles.priceUnit}>one-time</span>
-          </div>
+          {isPro ? (
+            <div className={styles.priceCard}>
+              <span className={styles.priceAmount}>Free</span>
+              <span className={styles.priceUnit}>included with Pro</span>
+            </div>
+          ) : (
+            <div className={styles.priceCard}>
+              <span className={styles.priceAmount}>${EXPORT_PRICE_USD}</span>
+              <span className={styles.priceUnit}>one-time checkout</span>
+            </div>
+          )}
 
-          <button className={styles.modalPrimaryBtn} onClick={handlePurchase}>
-            Pay ${EXPORT_PRICE_USD} & Download
-          </button>
+          {isPro ? (
+            <button className={styles.modalPrimaryBtn} onClick={handleFreeDownload}>
+              Download Export (.zip)
+            </button>
+          ) : (
+            <a
+              href={LEMON_EXPORT_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.modalPrimaryBtn}
+              style={{
+                textDecoration: "none",
+                textAlign: "center",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <span>Pay ${EXPORT_PRICE_USD} & Unlock Download</span>
+              <ExternalLink size={16} />
+            </a>
+          )}
+
           <button className={styles.modalGhostBtn} onClick={handleClose}>
             Cancel
           </button>
@@ -89,7 +112,7 @@ export default function ExportModal({ open, onClose, projectName }) {
       {phase === "processing" && (
         <div className={styles.modalCenter}>
           <Loader2 size={28} className={styles.spin} />
-          <p className={styles.modalSubtitle}>Processing payment & bundling your export...</p>
+          <p className={styles.modalSubtitle}>Bundling your export zip...</p>
         </div>
       )}
 
