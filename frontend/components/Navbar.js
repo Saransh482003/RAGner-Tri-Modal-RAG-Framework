@@ -1,6 +1,7 @@
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/router";
-import { Database, Sparkles, ArrowRight, Compass, CreditCard, LayoutDashboard } from "lucide-react";
+import { Sparkles, ArrowRight, Compass, CreditCard, LayoutDashboard } from "lucide-react";
 import styles from "@/styles/Navbar.module.css";
 
 export default function Navbar() {
@@ -13,7 +14,14 @@ export default function Navbar() {
       <nav className={styles.navbar}>
         <Link href="/" className={styles.brand}>
           <div className={styles.brandIconWrapper}>
-            <Database size={20} className={styles.brandIcon} />
+            <Image
+              src="/RAGner-Logo-Circular.png"
+              alt="RAGner Logo"
+              width={34}
+              height={34}
+              className={styles.brandLogoImg}
+              priority
+            />
             <span className={styles.pulsePoint} />
           </div>
           <span className={styles.brandName}>

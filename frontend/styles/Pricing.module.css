@@ -52,13 +52,26 @@
 }
 
 .grid {
-  max-width: 1200px;
-  margin: 0 auto 90px;
+  max-width: 1320px;
+  margin: 0 auto 80px;
   padding: 0 24px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 30px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px;
   align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+    max-width: 440px;
+  }
 }
 
 .card {
@@ -251,9 +264,95 @@
   line-height: 1.6;
 }
 
+/* Enterprise Banner under the 3 self-serve tiers */
+.enterpriseBanner {
+  max-width: 1200px;
+  margin: 0 auto 90px;
+  padding: 0 24px;
+}
+
+.enterpriseCard {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 20px;
+  padding: 36px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  color: #ffffff;
+  box-shadow: 0 20px 30px -10px rgba(15, 23, 42, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.enterpriseInfo {
+  max-width: 700px;
+}
+
+.enterpriseBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(2, 132, 199, 0.25);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  margin-bottom: 12px;
+}
+
+.enterpriseTitle {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.enterpriseDesc {
+  font-size: 0.92rem;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.enterpriseBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 26px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.enterpriseBtn:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+  color: #0284c7;
+}
+
 @media (max-width: 960px) {
   .grid {
     grid-template-columns: 1fr;
     max-width: 480px;
+  }
+
+  .enterpriseCard {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 28px 24px;
+  }
+
+  .enterpriseBtn {
+    width: 100%;
+    justify-content: center;
   }
 }

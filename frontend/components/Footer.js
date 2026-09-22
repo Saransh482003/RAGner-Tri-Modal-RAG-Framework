@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Database, GitBranch, Heart, Code2 } from "lucide-react";
+import Image from "next/image";
+import { GitBranch, Heart, Code2 } from "lucide-react";
 import styles from "@/styles/Footer.module.css";
 
 export default function Footer() {
@@ -10,7 +11,13 @@ export default function Footer() {
           <div className={styles.colBrand}>
             <div className={styles.brand}>
               <div className={styles.brandIconWrapper}>
-                <Database size={18} className={styles.brandIcon} />
+                <Image
+                  src="/RAGner-Logo-Circular.png"
+                  alt="RAGner Logo"
+                  width={32}
+                  height={32}
+                  className={styles.brandLogoImg}
+                />
               </div>
               <span className={styles.brandName}>
                 RAG<span className={styles.brandHighlight}>ner</span>

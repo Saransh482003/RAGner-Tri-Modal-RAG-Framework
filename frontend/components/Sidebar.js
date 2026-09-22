@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
+import Image from "next/image";
 import {
-  Database, Paperclip, FileText, Loader2, RefreshCw, PackageOpen,
+  Paperclip, FileText, Loader2, RefreshCw, PackageOpen,
 } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import UsageMeter from "./UsageMeter";
@@ -104,7 +105,13 @@ export default function Sidebar({
     <div className={styles.sidebar}>
       <div className={styles.header}>
         <h1 className={styles.title}>
-          <Database size={22} className={styles.titleIcon} />
+          <Image
+            src="/RAGner-Logo-Circular.png"
+            alt="RAGner Logo"
+            width={26}
+            height={26}
+            className={styles.titleLogoImg}
+          />
           RAGner
         </h1>
         <p className={styles.subtitle}>Agentic Retrieval Engine</p>

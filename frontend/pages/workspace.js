@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import Sidebar from "@/components/Sidebar";
 import ChatPanel from "@/components/ChatPanel";
@@ -8,7 +9,7 @@ import UpgradeModal from "@/components/modals/UpgradeModal";
 import EnterpriseModal from "@/components/modals/EnterpriseModal";
 import ExportModal from "@/components/modals/ExportModal";
 import { useUsageTracker } from "@/lib/useUsageTracker";
-import { Database, Home as HomeIcon, CreditCard, Sparkles, Compass } from "lucide-react";
+import { Home as HomeIcon, CreditCard, Sparkles, Compass } from "lucide-react";
 import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
 import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
@@ -31,7 +32,19 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     if (router.isReady) {
-      if (router.query.project) setProjectName(router.query.project);
+      if (router.query.project) {
+        setProjectName(router.query.project);
+      } else if (typeof window !== "undefined") {
+        // Tier 1: Sandbox UUID auto-generation if no project slug is specified
+        const storedUid = window.localStorage.getItem("ragner_sandbox_user_uuid");
+        if (storedUid) {
+          setProjectName(storedUid);
+        } else {
+          const newUid = `user_${Math.random().toString(36).substring(2, 7)}`;
+          window.localStorage.setItem("ragner_sandbox_user_uuid", newUid);
+          setProjectName(newUid);
+        }
+      }
     }
   }, [router.isReady, router.query]);
 
@@ -204,7 +217,13 @@ export default function WorkspacePage() {
           <div className={styles.topNavLeft}>
             <Link href="/" className={styles.topNavBrand} title="Back to Landing Page">
               <div className={styles.topNavLogo}>
-                <Database size={16} />
+                <Image
+                  src="/RAGner-Logo-Circular.png"
+                  alt="RAGner Logo"
+                  width={24}
+                  height={24}
+                  className={styles.brandLogoImg}
+                />
               </div>
               <span className={styles.topNavName}>
                 RAG<span style={{ color: "var(--primary)" }}>ner</span>

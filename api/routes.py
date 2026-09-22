@@ -1,5 +1,6 @@
 import os
 import uuid
+import pypdf
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -141,30 +142,64 @@ async def upload_document(
 
     # FIX: Initialize the master collection, NOT a separate collection per project
     init_collection(q_client, MASTER_COLLECTION_NAME, vector_size=1536)
+
+    # Sandbox tier validation (project_name starting with user_ or default_project)
+    is_sandbox = project_name.startswith("user_") or project_name == "default_project" or project_name == ""
+    if is_sandbox and len(files) > 3:
+        raise HTTPException(
+            status_code=403,
+            detail="Sandbox tier allows a maximum of 3 files per upload. Please upgrade to Starter or Pro."
+        )
     
+    total_upload_pages = 0
+    saved_temp_files = []
+
+    # Pre-validate files and page count with pypdf before expensive ingestion
     for file in files:
         if not file.filename.endswith('.pdf'):
-            raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+            raise HTTPException(status_code=400, detail=f"File {file.filename} is not supported. Only PDF files are accepted.")
         
-        temp_file_path = f"temp_{file.filename}"
+        temp_file_path = f"temp_{uuid.uuid4().hex[:8]}_{file.filename}"
         with open(temp_file_path, "wb") as f:
             f.write(await file.read())
+        saved_temp_files.append((file.filename, temp_file_path))
 
+        try:
+            reader = pypdf.PdfReader(temp_file_path)
+            num_pages = len(reader.pages)
+            total_upload_pages += num_pages
+        except Exception as e:
+            # Clean up all created temp files
+            for _, p in saved_temp_files:
+                if os.path.exists(p):
+                    os.remove(p)
+            raise HTTPException(status_code=400, detail=f"Could not read PDF '{file.filename}': {str(e)}")
+
+    if is_sandbox and total_upload_pages > 50:
+        for _, p in saved_temp_files:
+            if os.path.exists(p):
+                os.remove(p)
+        raise HTTPException(
+            status_code=403,
+            detail=f"Sandbox tier limit exceeded: Upload contains {total_upload_pages} pages (limit is 50 pages). Please upgrade to Starter or Pro."
+        )
+    
+    for filename, temp_file_path in saved_temp_files:
         try:
             # PDF Parsing, Chunking, and Upserting to Qdrant
             elements = parse_pdf_document(temp_file_path, strategy="hi_res")
             for el in elements:
                 if "metadata" in el:
-                    el["metadata"]["filename"] = file.filename
+                    el["metadata"]["filename"] = filename
 
             base_chunks = advanced_chunking(elements)
             if base_chunks:
                 upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, base_chunks, embedder)
                 total_base_chunks += len(base_chunks)
-                doc_chunks_map[file.filename] = base_chunks
+                doc_chunks_map[filename] = base_chunks
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error processing {file.filename}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error processing {filename}: {str(e)}")
         finally:
             if os.path.exists(temp_file_path):
                 os.remove(temp_file_path)

@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import ChatPanel from "@/components/ChatPanel";
 import {
-  Database,
   Home as HomeIcon,
   CreditCard,
   Compass,
@@ -123,7 +123,13 @@ export default function ExploreBotPage() {
           <div className={styles.topNavLeft}>
             <Link href="/" className={styles.topNavBrand} title="Back to Landing Page">
               <div className={styles.topNavLogo}>
-                <Database size={16} />
+                <Image
+                  src="/RAGner-Logo-Circular.png"
+                  alt="RAGner Logo"
+                  width={24}
+                  height={24}
+                  className={styles.brandLogoImg}
+                />
               </div>
               <span className={styles.topNavName}>
                 RAG<span style={{ color: "var(--primary)" }}>ner</span>

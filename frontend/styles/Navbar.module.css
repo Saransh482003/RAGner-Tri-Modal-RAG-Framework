@@ -36,15 +36,14 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0284c7, #2563eb);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.28);
 }
 
-.brandIcon {
-  color: #ffffff;
+.brandLogoImg {
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .pulsePoint {

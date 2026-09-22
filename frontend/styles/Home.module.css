@@ -40,11 +40,14 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+}
+
+.brandLogoImg {
+  border-radius: 6px;
+  object-fit: contain;
 }
 
 .topNavName {
@@ -170,10 +173,15 @@
 .title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 1.15rem;
   font-weight: 800;
   color: #0f172a;
+}
+
+.titleLogoImg {
+  border-radius: 6px;
+  object-fit: contain;
 }
 
 .titleIcon {
