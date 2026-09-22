@@ -1,23 +1,21 @@
 import os
-import uuid
-import pypdf
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from qdrant_client.models import Filter, FieldCondition, MatchValue
+from dotenv import load_dotenv
 
+from utils.validators import validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
+from db.users import is_admin_email, sync_or_create_user, get_user_by_email, ADMIN_EMAILS
+from services.pipeline import execute_pipeline_stages, get_existing_chunks_from_qdrant
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
-from services.builder_raptor import build_raptor_tree
 from services.retrieval_vector import retrieve_vector_context
-from services.builder_graph import build_knowledge_graph
 from services.retrieval_graph import retrieve_graph_context
 from services.exporter import build_export_zip
 from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
 from services.generation import initialize_llm_client, generate_answer
 from services.query_router import route_query
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -25,8 +23,6 @@ router = APIRouter()
 q_client = get_qdrant_client()
 llm_client = initialize_llm_client()
 MODEL_NAME = os.getenv("GENERATION_MODEL", "openrouter/free")
-
-# The single multi-tenant master collection
 MASTER_COLLECTION_NAME = "ragner_master_collection"
 
 
@@ -35,93 +31,24 @@ class QueryRequest(BaseModel):
     strategy: str = "auto"
     document_name: Optional[str] = None
     project_name: Optional[str] = None
+    user_email: Optional[str] = None
+
+class UserSyncRequest(BaseModel):
+    user_id: str
+    email: str
+    name: Optional[str] = None
+    provider: str = "google"
 
 class RebuildRequest(BaseModel):
     project_name: Optional[str] = None
     document_name: Optional[str] = None
     build_raptor: bool = False
     build_graph: bool = True
+    user_email: Optional[str] = None
     
-
-def get_existing_chunks_from_qdrant(
-    q_client, 
-    project_name: str, 
-    doc_name: Optional[str] = None, 
-    chunk_type: Optional[str] = None
-) -> List[Dict[str, Any]]:
-    """Retrieves already stored chunks from Qdrant without re-reading PDFs."""
-    filter_conditions = [
-        FieldCondition(key="project_name", match=MatchValue(value=project_name))
-    ]
-    if doc_name:
-        filter_conditions.append(FieldCondition(key="source", match=MatchValue(value=doc_name)))
-    if chunk_type:
-        filter_conditions.append(FieldCondition(key="chunk_type", match=MatchValue(value=chunk_type)))
-
-    q_filter = Filter(must=filter_conditions) if filter_conditions else None
-
-    points, _ = q_client.scroll(
-        collection_name=MASTER_COLLECTION_NAME,
-        scroll_filter=q_filter,
-        limit=1000,
-        with_payload=True,
-        with_vectors=False
-    )
-    return [{"text": p.payload.get("text", ""), "metadata": p.payload} for p in points]
-
-
-def execute_pipeline_stages(
-    doc_chunks_map: Dict[str, List[Dict[str, Any]]],
-    embedder,
-    llm_client,
-    q_client,
-    project_name: str,
-    build_raptor: bool = True,
-    build_graph: bool = True
-):
-    """
-    Executes RAPTOR and/or GraphRAG independently.
-    If RAPTOR is skipped, GraphRAG automatically falls back to existing Qdrant summaries or base chunks.
-    """
-    for doc_name, base_chunks in doc_chunks_map.items():
-        summary_chunks = []
-
-        # --- STAGE 1: RAPTOR TREE CONSTRUCTION ---
-        if build_raptor:
-            try:
-                print(f"[Stage: RAPTOR] Building tree for: {doc_name}")
-                collapsed_tree = build_raptor_tree(base_chunks, embedder, llm_client)
-                summary_chunks = [
-                    chunk for chunk in collapsed_tree
-                    if chunk["metadata"].get("chunk_type") in ["raptor_summary", "raptor_root_summary"]
-                ]
-                if summary_chunks:
-                    print(f"[Stage: RAPTOR] Upserting {len(summary_chunks)} summaries to Qdrant...")
-                    upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, summary_chunks, embedder)
-            except Exception as e:
-                print(f"[Stage: RAPTOR Failed] Error on {doc_name}: {e}")
-                
-        # --- STAGE 2: KNOWLEDGE GRAPH CONSTRUCTION ---
-        if build_graph:
-            try:
-                if not summary_chunks:
-                    print(f"[Stage: GraphRAG] Checking Qdrant for existing summaries for {doc_name}...")
-                    existing_summaries = get_existing_chunks_from_qdrant(
-                        q_client, project_name=project_name, doc_name=doc_name, chunk_type="raptor_summary"
-                    )
-                    summary_chunks = existing_summaries if existing_summaries else base_chunks
-
-                print(f"[Stage: GraphRAG] Building Knowledge Graph with {len(summary_chunks)} chunks...")
-                build_knowledge_graph(
-                    summary_chunks, 
-                    llm_client, 
-                    document_name=doc_name, 
-                    project_name=project_name
-                )
-                print(f"[Stage: GraphRAG Complete] Successfully built graph for: {doc_name}")
-            except Exception as e:
-                print(f"[Stage: GraphRAG Failed] Error building graph for {doc_name}: {e}")
-
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    return forwarded.split(",")[0].strip() if forwarded else request.client.host
 
 @router.post("/upload")
 async def upload_document(
@@ -130,63 +57,21 @@ async def upload_document(
     files: List[UploadFile] = File(...),
     build_raptor: bool = Form(True),
     build_graph: bool = Form(True),
-    project_name: str = Form("default_project")
+    project_name: str = Form("default_project"),
+    user_email: Optional[str] = Form(None)
 ):   
-    """
-    Synchronously parses and upserts base chunks for instant Vanilla RAG.
-    Asynchronously builds the RAPTOR Tree and Knowledge Graph.
-    """
     embedder = request.app.state.embedder
+    init_collection(q_client, MASTER_COLLECTION_NAME, vector_size=1536)
+
+    # Sandbox Validation with Admin Bypass
+    client_ip = get_client_ip(request)
+    saved_temp_files, _ = validate_and_save_uploads(files, project_name, client_ip, user_email=user_email)
+    
     total_base_chunks = 0
     doc_chunks_map = {}
 
-    # FIX: Initialize the master collection, NOT a separate collection per project
-    init_collection(q_client, MASTER_COLLECTION_NAME, vector_size=1536)
-
-    # Sandbox tier validation (project_name starting with user_ or default_project)
-    is_sandbox = project_name.startswith("user_") or project_name == "default_project" or project_name == ""
-    if is_sandbox and len(files) > 3:
-        raise HTTPException(
-            status_code=403,
-            detail="Sandbox tier allows a maximum of 3 files per upload. Please upgrade to Starter or Pro."
-        )
-    
-    total_upload_pages = 0
-    saved_temp_files = []
-
-    # Pre-validate files and page count with pypdf before expensive ingestion
-    for file in files:
-        if not file.filename.endswith('.pdf'):
-            raise HTTPException(status_code=400, detail=f"File {file.filename} is not supported. Only PDF files are accepted.")
-        
-        temp_file_path = f"temp_{uuid.uuid4().hex[:8]}_{file.filename}"
-        with open(temp_file_path, "wb") as f:
-            f.write(await file.read())
-        saved_temp_files.append((file.filename, temp_file_path))
-
-        try:
-            reader = pypdf.PdfReader(temp_file_path)
-            num_pages = len(reader.pages)
-            total_upload_pages += num_pages
-        except Exception as e:
-            # Clean up all created temp files
-            for _, p in saved_temp_files:
-                if os.path.exists(p):
-                    os.remove(p)
-            raise HTTPException(status_code=400, detail=f"Could not read PDF '{file.filename}': {str(e)}")
-
-    if is_sandbox and total_upload_pages > 50:
-        for _, p in saved_temp_files:
-            if os.path.exists(p):
-                os.remove(p)
-        raise HTTPException(
-            status_code=403,
-            detail=f"Sandbox tier limit exceeded: Upload contains {total_upload_pages} pages (limit is 50 pages). Please upgrade to Starter or Pro."
-        )
-    
-    for filename, temp_file_path in saved_temp_files:
-        try:
-            # PDF Parsing, Chunking, and Upserting to Qdrant
+    try:
+        for filename, temp_file_path in saved_temp_files:
             elements = parse_pdf_document(temp_file_path, strategy="hi_res")
             for el in elements:
                 if "metadata" in el:
@@ -197,55 +82,30 @@ async def upload_document(
                 upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, base_chunks, embedder)
                 total_base_chunks += len(base_chunks)
                 doc_chunks_map[filename] = base_chunks
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error processing {filename}: {str(e)}")
-        finally:
-            if os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+    finally:
+        cleanup_temp_files(saved_temp_files)
 
     if (build_raptor or build_graph) and doc_chunks_map:
         background_tasks.add_task(
             execute_pipeline_stages, 
-            doc_chunks_map, embedder, llm_client, q_client,
-            project_name, build_raptor, build_graph
+            doc_chunks_map, embedder, llm_client, q_client, MASTER_COLLECTION_NAME, project_name, build_raptor, build_graph
         )
 
     return {
         "message": f"Processed {len(files)} document(s). Base chunks stored under master collection with project tag '{project_name}'.",
-        "stages_queued": {
-            "raptor": build_raptor,
-            "graph": build_graph
-        },
+        "stages_queued": {"raptor": build_raptor, "graph": build_graph},
         "total_base_chunks": total_base_chunks,
         "documents": list(doc_chunks_map.keys())
     }
 
 
 @router.post("/pipeline/rebuild")
-async def rebuild_pipeline_stage(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    body: RebuildRequest
-):
-    """
-    RECOVERY ENDPOINT: Re-runs RAPTOR or GraphRAG directly from existing 
-    Qdrant chunks without re-uploading or re-parsing PDFs.
-    """
+async def rebuild_pipeline_stage(request: Request, background_tasks: BackgroundTasks, body: RebuildRequest):
     embedder = request.app.state.embedder
+    base_chunks = get_existing_chunks_from_qdrant(q_client, MASTER_COLLECTION_NAME, body.project_name, body.document_name, "text")
     
-    # FIX: Pass project_name properly
-    base_chunks = get_existing_chunks_from_qdrant(
-        q_client, 
-        project_name=body.project_name, 
-        doc_name=body.document_name, 
-        chunk_type="text"
-    )
     if not base_chunks:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"No base chunks found for project '{body.project_name}'. Run upload first."
-        )
+        raise HTTPException(status_code=404, detail=f"No base chunks found for project '{body.project_name}'.")
 
     doc_chunks_map = {}
     for c in base_chunks:
@@ -253,92 +113,86 @@ async def rebuild_pipeline_stage(
         doc_chunks_map.setdefault(src, []).append(c)
 
     background_tasks.add_task(
-        execute_pipeline_stages,
-        doc_chunks_map, embedder, llm_client, q_client,
-        body.project_name, body.build_raptor, body.build_graph
+        execute_pipeline_stages, doc_chunks_map, embedder, llm_client, q_client, MASTER_COLLECTION_NAME, body.project_name, body.build_raptor, body.build_graph
+    )
+    return {"status": "Rebuild task initiated in background."}
+
+
+@router.post("/auth/sync-user")
+async def sync_user_endpoint(body: UserSyncRequest):
+    """
+    Syncs Clerk Google/GitHub authenticated users into SQLite users table.
+    Admin emails automatically receive unrestricted privileges.
+    """
+    user_record = sync_or_create_user(
+        user_id=body.user_id,
+        email=body.email,
+        name=body.name,
+        provider=body.provider
     )
     return {
-        "status": "Rebuild task initiated in background.",
-        "project": body.project_name,
-        "document_targeted": body.document_name or "All documents in project",
-        "stages_triggered": {
-            "raptor": body.build_raptor,
-            "graph": body.build_graph
-        }
+        "status": "success",
+        "user": user_record
     }
+
+@router.get("/auth/user/{email}")
+async def get_user_status(email: str):
+    """Retrieves user profile and tier limits from database."""
+    user = get_user_by_email(email)
+    if not user:
+        is_admin = is_admin_email(email)
+        return {
+            "email": email,
+            "role": "admin" if is_admin else "user",
+            "tier": "admin_unrestricted" if is_admin else "sandbox",
+            "is_admin": is_admin
+        }
+    user["is_admin"] = user.get("role") == "admin"
+    return user
 
 @router.post("/query")
 async def query_documents(request: Request, body: QueryRequest):
-    """
-    Routes the query to the correct strategy (Vector, Tree, or Graph) and generates an answer.
-    """
+    is_admin = is_admin_email(body.user_email)
+    is_sandbox = not is_admin and ((body.project_name or "").startswith("user_") or body.project_name in ("default_project", "", None))
+    
+    if is_sandbox:
+        client_ip = get_client_ip(request)
+        allowed, message = check_sandbox_limits(client_ip, new_queries=1)
+        if not allowed:
+            raise HTTPException(status_code=403, detail=f"Sandbox Limit: {message} Upgrade to Pro.")
+
     if not llm_client:
-        raise HTTPException(status_code=500, detail="LLM Client not initialized. Check OPEN_ROUTER_API_KEY.")
+        raise HTTPException(status_code=500, detail="LLM Client not initialized.")
+    
+    embedder, reranker = request.app.state.embedder, request.app.state.reranker
+    active_strategy = route_query(llm_client, body.query) if body.strategy == "auto" else body.strategy
 
-    try:
-        embedder = request.app.state.embedder
-        reranker = request.app.state.reranker
-
-        active_collection = MASTER_COLLECTION_NAME
-        project_filter = body.project_name
-
-        active_strategy = body.strategy
-        if active_strategy == "auto":
-            active_strategy = route_query(llm_client, body.query)
-
-        if active_strategy == "graph":
-            # FIX: Pass project_filter to Neo4j, NOT the Qdrant collection name
-            retrieved_chunks = retrieve_graph_context(body.query, llm_client, project_name=project_filter)
-
-            if not retrieved_chunks:
-                retrieved_chunks = retrieve_vector_context(
-                    client=q_client, 
-                    collection_name=active_collection, 
-                    query=body.query,
-                    embedder=embedder,
-                    reranker=reranker,
-                    strategy="vanilla",
-                    document_source=body.document_name,
-                    project_name=project_filter,
-                    bi_encoder_top_k=15, 
-                    cross_encoder_top_k=5
-                )
-        else:
+    if active_strategy == "graph":
+        retrieved_chunks = retrieve_graph_context(body.query, llm_client, project_name=body.project_name)
+        if not retrieved_chunks:
             retrieved_chunks = retrieve_vector_context(
-                client=q_client, 
-                collection_name=active_collection, 
-                query=body.query,
-                embedder=embedder,
-                reranker=reranker,
-                strategy=active_strategy,
-                document_source=body.document_name,
-                project_name=project_filter,
-                bi_encoder_top_k=15, 
-                cross_encoder_top_k=5
+                client=q_client, collection_name=MASTER_COLLECTION_NAME, query=body.query, embedder=embedder,
+                reranker=reranker, strategy="vanilla", document_source=body.document_name, project_name=body.project_name
             )
-        answer = generate_answer(llm_client, body.query, retrieved_chunks, model_name=MODEL_NAME)
-        return {
-            "query": body.query,
-            "answer": answer,
-            "sources": retrieved_chunks,
-            "strategy_used": active_strategy 
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    else:
+        retrieved_chunks = retrieve_vector_context(
+            client=q_client, collection_name=MASTER_COLLECTION_NAME, query=body.query, embedder=embedder,
+            reranker=reranker, strategy=active_strategy, document_source=body.document_name, project_name=body.project_name
+        )
+        
+    return {
+        "query": body.query,
+        "answer": generate_answer(llm_client, body.query, retrieved_chunks, model_name=MODEL_NAME),
+        "sources": retrieved_chunks,
+        "strategy_used": active_strategy 
+    }
 
 @router.get("/export/{project_name}")
 async def export_project(project_name: str):
-    """
-    Bundles this project's Qdrant vectors/payloads and Neo4j triplets into a downloadable zip.
-    Gated client-side behind the one-time export purchase flow (see ExportModal).
-    """
     zip_buffer, point_count, triplet_count = build_export_zip(q_client, MASTER_COLLECTION_NAME, project_name)
-
     if point_count == 0 and triplet_count == 0:
         raise HTTPException(status_code=404, detail=f"No data found for project '{project_name}'.")
 
     return StreamingResponse(
-        zip_buffer,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'},
+        zip_buffer, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'}
     )

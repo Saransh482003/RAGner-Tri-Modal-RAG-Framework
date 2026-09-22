@@ -76,7 +76,7 @@ export default function LandingPage() {
             </div>
             <div className={styles.statItem}>
               <CheckCircle2 size={16} />
-              <span>Cross-Encoder BGE Re-ranking</span>
+              <span>Cross-Encoder Cohere Re-ranking</span>
             </div>
             <div className={styles.statItem}>
               <CheckCircle2 size={16} />
@@ -200,7 +200,7 @@ export default function LandingPage() {
               </div>
               <h3 className={styles.featureTitle}>Cross-Encoder Re-Ranking</h3>
               <p className={styles.featureDesc}>
-                Deep semantic re-ranking via BGE-Reranker-Large scores candidate passages against the query simultaneously, weeding out irrelevant hits before feeding context to the LLM.
+                Deep semantic re-ranking via Cohere-Reranker-Large scores candidate passages against the query simultaneously, weeding out irrelevant hits before feeding context to the LLM.
               </p>
             </div>
 

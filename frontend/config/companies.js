@@ -1,21 +1,21 @@
 export const MASTER_COLLECTION = "ragner_master_collection";
 
 export const COMPANY_DIRECTORY = {
-  master: {
-    id: "master",
-    displayName: "Global Master Corpus",
-    projectName: null, // Sending null triggers Global Database Search
-    slug: "master",
-    description: "Global cross-document knowledge base across all indexed organizations, SEC filings, and technical papers.",
-    docs: ["All Indexed Global Documents"],
-    tags: ["Global Corpus", "Cross-Entity", "Auto-Router"],
-    author: "ragner-system",
-    sampleQuestions: [
-      "Compare Microsoft's cloud growth with Amazon's AWS growth.",
-      "What were the total Q2 capital expenditures for Meta and NVIDIA combined?",
-      "What is the career transition rate for the Scaler Data Science program?"
-    ]
-  },
+  // master: {
+  //   id: "master",
+  //   displayName: "Global Master Corpus",
+  //   projectName: null, // Sending null triggers Global Database Search
+  //   slug: "master",
+  //   description: "Global cross-document knowledge base across all indexed organizations, SEC filings, and technical papers.",
+  //   docs: ["All Indexed Global Documents"],
+  //   tags: ["Global Corpus", "Cross-Entity", "Auto-Router"],
+  //   author: "ragner-system",
+  //   sampleQuestions: [
+  //     "Compare Microsoft's cloud growth with Amazon's AWS growth.",
+  //     "What were the total Q2 capital expenditures for Meta and NVIDIA combined?",
+  //     "What is the career transition rate for the Scaler Data Science program?"
+  //   ]
+  // },
   scaler: {
     id: "scaler",
     displayName: "Scaler Academic & AI Programs",

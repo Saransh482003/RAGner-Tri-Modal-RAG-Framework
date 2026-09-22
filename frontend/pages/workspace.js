@@ -9,7 +9,8 @@ import UpgradeModal from "@/components/modals/UpgradeModal";
 import EnterpriseModal from "@/components/modals/EnterpriseModal";
 import ExportModal from "@/components/modals/ExportModal";
 import { useUsageTracker } from "@/lib/useUsageTracker";
-import { Home as HomeIcon, CreditCard, Sparkles, Compass } from "lucide-react";
+import { Home as HomeIcon, CreditCard, Sparkles, Compass, LogIn } from "lucide-react";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
 import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
@@ -262,6 +263,26 @@ export default function WorkspacePage() {
             ) : (
               <span className={styles.proActiveBadge}>PRO ACTIVE</span>
             )}
+
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button className={styles.signInBtnNav}>
+                  <LogIn size={13} />
+                  <span>Sign In</span>
+                </button>
+              </SignInButton>
+            </Show>
+
+            <Show when="signed-in">
+              <UserButton
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    avatarBox: { width: 30, height: 30 },
+                  },
+                }}
+              />
+            </Show>
           </div>
         </header>
 

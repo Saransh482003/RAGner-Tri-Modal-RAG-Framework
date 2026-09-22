@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { Sparkles, ArrowRight, Compass, CreditCard, LayoutDashboard } from "lucide-react";
+import { Sparkles, ArrowRight, Compass, CreditCard, LayoutDashboard, LogIn } from "lucide-react";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import styles from "@/styles/Navbar.module.css";
 
 export default function Navbar() {
@@ -62,6 +63,26 @@ export default function Navbar() {
         </div>
 
         <div className={styles.navActions}>
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <button className={styles.signInBtn}>
+                <LogIn size={14} />
+                <span>Sign In</span>
+              </button>
+            </SignInButton>
+          </Show>
+
+          <Show when="signed-in">
+            <UserButton
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: { width: 34, height: 34 },
+                },
+              }}
+            />
+          </Show>
+
           <Link href="/workspace" className={styles.ctaButton}>
             <span>Launch App</span>
             <ArrowRight size={15} />

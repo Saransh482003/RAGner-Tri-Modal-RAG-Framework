@@ -49,7 +49,7 @@ export default function Footer() {
               <li><span className={styles.techTag}>Qdrant Vector DB</span></li>
               <li><span className={styles.techTag}>Neo4j Graph Engine</span></li>
               <li><span className={styles.techTag}>RAPTOR Recursive Tree</span></li>
-              <li><span className={styles.techTag}>BGE-Reranker-Large</span></li>
+              <li><span className={styles.techTag}>Cohere-Reranker-Large</span></li>
             </ul>
           </div>
 
