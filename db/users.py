@@ -21,6 +21,9 @@ TIER_LIMITS = {
 
 def init_users_table():
     with sqlite3.connect(DB_PATH) as conn:
+        # Turn on Write-Ahead Logging for concurrent SaaS traffic
+        conn.execute("PRAGMA journal_mode=WAL;")
+        
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,

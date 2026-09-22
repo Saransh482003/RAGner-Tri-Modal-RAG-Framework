@@ -13,6 +13,9 @@ DB_PATH = os.path.join(DB_DIR, "sandbox_usage.db")
 
 def init_sandbox_db():
     with sqlite3.connect(DB_PATH) as conn:
+        # Turn on Write-Ahead Logging for concurrent SaaS traffic
+        conn.execute("PRAGMA journal_mode=WAL;")
+        
         conn.execute("""
             CREATE TABLE IF NOT EXISTS usage (
                 ip_address TEXT PRIMARY KEY,

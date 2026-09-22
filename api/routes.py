@@ -184,8 +184,11 @@ async def lemonsqueezy_webhook(request: Request):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     payload = await request.json()
+    is_test_mode = payload.get("meta", {}).get("test_mode", False)
+    if is_test_mode and os.getenv("ENVIRONMENT") == "production":
+        return {"status": "ignored", "reason": "Test mode webhook ignored in production."}
+    
     event_name = payload.get("meta", {}).get("event_name", "")
-
     custom_data = payload.get("meta", {}).get("custom_data", {})
     user_id = custom_data.get("user_id")
 
