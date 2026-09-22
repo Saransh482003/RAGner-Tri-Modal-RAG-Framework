@@ -28,7 +28,7 @@ def init_users_table():
                 name TEXT,
                 provider TEXT DEFAULT 'google',
                 role TEXT DEFAULT 'user',
-                tier TEXT DEFAULT 'starter',
+                tier TEXT DEFAULT 'sandbox',
                 workspaces_allowed INTEGER DEFAULT 1,
                 pages_processed INTEGER DEFAULT 0,
                 queries_made INTEGER DEFAULT 0,
@@ -49,6 +49,8 @@ def init_users_table():
             conn.execute("ALTER TABLE users ADD COLUMN queries_made INTEGER DEFAULT 0")
         if "workspaces" not in existing_cols:
             conn.execute("ALTER TABLE users ADD COLUMN workspaces TEXT DEFAULT '[]'")
+        if "export_unlocked" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN export_unlocked BOOLEAN DEFAULT FALSE")
 
         # Seed or ensure admin accounts exist with unrestricted superuser tier
         for admin_email in ADMIN_EMAILS:
@@ -65,6 +67,18 @@ def init_users_table():
 
 init_users_table()
 
+def is_admin_id(user_id: Optional[str]) -> bool:
+    """Checks if a Clerk user_id belongs to an admin by querying the database."""
+    if not user_id:
+        return False
+        
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        
+        return bool(row and row["role"] == "admin")
 def is_admin_email(email: Optional[str]) -> bool:
     if not email:
         return False
@@ -91,10 +105,11 @@ def sync_or_create_user(
     name: Optional[str] = None,
     provider: str = "google"
 ) -> Dict[str, Any]:
+    
     norm_email = email.strip().lower()
     is_admin = is_admin_email(norm_email)
     role = "admin" if is_admin else "user"
-    tier = "admin_unrestricted" if is_admin else "starter"
+    tier = "admin_unrestricted" if is_admin else "sandbox"
     workspaces_cap = 999999 if is_admin else 1
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -110,16 +125,18 @@ def sync_or_create_user(
             INSERT INTO users (id, email, name, provider, role, tier, workspaces_allowed, pages_processed, queries_made, workspaces)
             VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
             ON CONFLICT(email) DO UPDATE SET
+                id = excluded.id,  -- CRITICAL FIX: Overwrite the dummy ID with the real Clerk ID
                 name = COALESCE(excluded.name, users.name),
                 provider = excluded.provider,
-                role = CASE WHEN users.role = 'admin' THEN 'admin' ELSE excluded.role END,
-                tier = CASE WHEN users.role = 'admin' THEN 'admin_unrestricted' ELSE users.tier END,
-                workspaces_allowed = CASE WHEN users.role = 'admin' THEN 999999 ELSE users.workspaces_allowed END,
+                role = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 'admin' ELSE excluded.role END,
+                tier = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 'admin_unrestricted' ELSE users.tier END,
+                workspaces_allowed = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 999999 ELSE users.workspaces_allowed END,
                 updated_at = CURRENT_TIMESTAMP
         """, (user_id, norm_email, name, provider, role, tier, workspaces_cap, initial_workspaces))
         conn.commit()
 
-        c.execute("SELECT * FROM users WHERE email = ?", (norm_email,))
+        # Look it up by the new Clerk ID just to be absolutely safe
+        c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         data = dict(c.fetchone())
         try:
             data["workspaces"] = json.loads(data.get("workspaces") or "[]")
@@ -127,27 +144,26 @@ def sync_or_create_user(
             data["workspaces"] = []
         return data
 
-def record_user_activity(email: str, new_pages: int = 0, new_queries: int = 0, new_workspace: Optional[str] = None) -> Tuple[bool, str]:
+def record_user_activity(user_id: str, new_pages: int = 0, new_queries: int = 0, new_workspace: Optional[str] = None) -> Tuple[bool, str]:
     """Records pages, queries, and registered workspaces under the user account with limit checking."""
-    norm_email = email.strip().lower()
-    is_admin = is_admin_email(norm_email)
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE email = ?", (norm_email,))
+
+        c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         user = c.fetchone()
 
         if not user:
-            # If user not synced yet, create a baseline record
-            sync_or_create_user(f"usr_{norm_email.replace('@', '_').replace('.', '_')}", norm_email)
-            c.execute("SELECT * FROM users WHERE email = ?", (norm_email,))
-            user = c.fetchone()
+            return False, "User account not found. Please log out and log back in."
+        
+        is_admin = (user["role"] == "admin")
 
         current_pages = user["pages_processed"] or 0
         current_queries = user["queries_made"] or 0
-        tier = user["tier"] or "starter"
-        limits = TIER_LIMITS.get(tier, TIER_LIMITS["starter"])
+
+        tier = user["tier"] or "sandbox"
+        limits = TIER_LIMITS.get(tier, TIER_LIMITS["sandbox"])
 
         try:
             workspaces_list = json.loads(user["workspaces"] or "[]")
@@ -171,32 +187,32 @@ def record_user_activity(email: str, new_pages: int = 0, new_queries: int = 0, n
                 queries_made = queries_made + ?,
                 workspaces = ?,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE email = ?
-        """, (new_pages, new_queries, json.dumps(workspaces_list), norm_email))
+            WHERE id = ?
+        """, (new_pages, new_queries, json.dumps(workspaces_list), user_id))
         conn.commit()
 
         return True, "Success"
 
-def upgrade_user_tier(email: str, tier: str) -> bool:
+def upgrade_user_tier(user_id: str, tier: str, unlock_export: bool = False) -> bool:
     """Updates user tier upon payment confirmation."""
-    norm_email = email.strip().lower()
-    is_admin = is_admin_email(norm_email)
-    assigned_tier = "admin_unrestricted" if is_admin else tier
-    workspaces = 999999 if is_admin else (5 if tier == "pro" else 1)
 
     with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
         c = conn.cursor()
-        c.execute("SELECT id FROM users WHERE email = ?", (norm_email,))
-        if not c.fetchone():
-            sync_or_create_user(f"usr_{norm_email.replace('@', '_').replace('.', '_')}", norm_email)
+        c.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+
+        if user and user["role"] == "admin":
+            return True
         
-        c.execute("""
-            UPDATE users
-            SET tier = ?,
-                workspaces_allowed = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE email = ?
-        """, (assigned_tier, workspaces, norm_email))
+        if unlock_export:
+            c.execute("UPDATE users SET export_unlocked = TRUE WHERE id = ?", (user_id,))
+        else:
+            workspaces = 5 if tier == "pro" else 1
+            c.execute("""
+                UPDATE users SET tier = ?, workspaces_allowed = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (tier, workspaces, user_id))
         conn.commit()
         return True
 

@@ -1,11 +1,15 @@
+import hashlib
+import hmac
+import json
 import os
+import sqlite3
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from utils.validators import validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
+from utils.validators import DB_PATH, validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
 from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, upgrade_user_tier, ADMIN_EMAILS
 from services.pipeline import execute_pipeline_stages, get_existing_chunks_from_qdrant
 from services.ingesting import parse_pdf_document
@@ -31,7 +35,7 @@ class QueryRequest(BaseModel):
     strategy: str = "auto"
     document_name: Optional[str] = None
     project_name: Optional[str] = None
-    user_email: Optional[str] = None
+    user_id: Optional[str] = None
 
 class UserSyncRequest(BaseModel):
     user_id: str
@@ -44,7 +48,7 @@ class RebuildRequest(BaseModel):
     document_name: Optional[str] = None
     build_raptor: bool = False
     build_graph: bool = True
-    user_email: Optional[str] = None
+    user_id: Optional[str] = None
     
 def get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For")
@@ -58,15 +62,21 @@ async def upload_document(
     build_raptor: bool = Form(True),
     build_graph: bool = Form(True),
     project_name: str = Form("default_project"),
-    user_email: Optional[str] = Form(None)
+    user_id: Optional[str] = Form(None)
 ):   
     embedder = request.app.state.embedder
     init_collection(q_client, MASTER_COLLECTION_NAME, vector_size=1536)
 
     # Sandbox Validation with Admin Bypass
     client_ip = get_client_ip(request)
-    saved_temp_files, _ = validate_and_save_uploads(files, project_name, client_ip, user_email=user_email)
-    
+    saved_temp_files, total_pages = validate_and_save_uploads(files, project_name, client_ip, user_id=user_id)
+
+    if user_id:
+        allowed, message = record_user_activity(user_id, new_pages=total_pages, new_workspace=project_name)
+        if not allowed:
+            cleanup_temp_files(saved_temp_files)
+            raise HTTPException(status_code=403, detail=message)
+        
     total_base_chunks = 0
     doc_chunks_map = {}
 
@@ -90,10 +100,6 @@ async def upload_document(
             execute_pipeline_stages, 
             doc_chunks_map, embedder, llm_client, q_client, MASTER_COLLECTION_NAME, project_name, build_raptor, build_graph
         )
-
-    # Record usage in users table if authenticated
-    if user_email:
-        record_user_activity(user_email, new_pages=len(saved_temp_files), new_workspace=project_name)
 
     return {
         "message": f"Processed {len(files)} document(s). Base chunks stored under master collection with project tag '{project_name}'.",
@@ -139,20 +145,26 @@ async def sync_user_endpoint(body: UserSyncRequest):
         "user": user_record
     }
 
-@router.get("/auth/user/{email}")
-async def get_user_status(email: str):
-    """Retrieves user profile and tier limits from database."""
-    user = get_user_by_email(email)
-    if not user:
-        is_admin = is_admin_email(email)
-        return {
-            "email": email,
-            "role": "admin" if is_admin else "user",
-            "tier": "admin_unrestricted" if is_admin else "sandbox",
-            "is_admin": is_admin
-        }
-    user["is_admin"] = user.get("role") == "admin"
-    return user
+@router.get("/auth/user/{user_id}")
+async def get_user_status(user_id: str):
+    """Retrieves user profile and tier limits from database by Clerk ID."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        data = dict(row)
+        try:
+            data["workspaces"] = json.loads(data.get("workspaces") or "[]")
+        except Exception:
+            data["workspaces"] = []
+            
+        data["is_admin"] = data.get("role") == "admin"
+        return data
 
 @router.post("/auth/webhook/lemonsqueezy")
 async def lemonsqueezy_webhook(request: Request):
@@ -160,43 +172,63 @@ async def lemonsqueezy_webhook(request: Request):
     Webhook endpoint for Lemon Squeezy to automatically upgrade user tiers.
     Handles 'order_created' and 'subscription_created' events.
     """
+    raw_body = await request.body()
+    signature = request.headers.get("X-Signature")
+    secret = os.getenv("LEMON_SQUEEZY_WEBHOOK_SECRET")
+
+    if not signature or not secret:
+        raise HTTPException(status_code=401, detail="Missing signature or secret")
+
+    expected_signature = hmac.new(secret.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected_signature, signature):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    payload = await request.json()
+    event_name = payload.get("meta", {}).get("event_name", "")
+
+    custom_data = payload.get("meta", {}).get("custom_data", {})
+    user_id = custom_data.get("user_id")
+
+    if not user_id:
+        return {"status": "ignored", "reason": "No Clerk user_id found in custom_data"}
+
+    product_name = payload.get("data", {}).get("attributes", {}).get("product_name", "").lower()
+
     try:
-        payload = await request.json()
-        event_name = payload.get("meta", {}).get("event_name", "")
-        data = payload.get("data", {})
-        attributes = data.get("attributes", {})
-        customer_email = attributes.get("user_email") or attributes.get("customer_email")
+        if event_name in ["subscription_created", "subscription_updated"]:
+            new_tier = "pro" if "pro" in product_name else "starter"
+            upgrade_user_tier(user_id=user_id, tier=new_tier)
+            print(f"✅ Upgraded Clerk ID {user_id} to {new_tier.upper()}")
 
-        if not customer_email:
-            return {"status": "ignored", "reason": "no email found in webhook payload"}
+        # Handle Cancellations (Downgrade back to Sandbox)
+        elif event_name in ["subscription_cancelled", "subscription_expired"]:
+            upgrade_user_tier(user_id=user_id, tier="sandbox")
+            print(f"❌ Downgraded Clerk ID {user_id} to SANDBOX")
 
-        # Inspect custom data or order total to match the tier
-        variant_name = (attributes.get("variant_name") or attributes.get("first_order_item", {}).get("variant_name") or "").lower()
-        order_name = (attributes.get("order_number") or "").lower()
+        # Handle $8 Data Export (Single Purchase)
+        elif event_name == "order_created" and "export" in product_name:
+            upgrade_user_tier(user_id=user_id, tier="", unlock_export=True)
+            print(f"📦 Unlocked Data Export for Clerk ID {user_id}")
 
-        # Default upgrade to pro if pro or 79, else starter
-        new_tier = "starter"
-        if "pro" in variant_name or attributes.get("total", 0) >= 7000:
-            new_tier = "pro"
-
-        upgrade_user_tier(customer_email, new_tier)
-        return {"status": "success", "email": customer_email, "tier": new_tier, "event": event_name}
+        return {"status": "success"}
     except Exception as e:
-        return {"status": "error", "detail": str(e)}
+        print(f"Error processing webhook for user {user_id}: {e}")
+        return {"status": "error", "reason": str(e)}
 
 @router.post("/query")
 async def query_documents(request: Request, body: QueryRequest):
-    is_admin = is_admin_email(body.user_email)
-    is_sandbox = not is_admin and ((body.project_name or "").startswith("user_") or body.project_name in ("default_project", "", None))
-    
-    if is_sandbox:
+    if not llm_client:
+        raise HTTPException(status_code=500, detail="LLM Client not initialized.")
+
+    if body.user_id:
+        allowed, message = record_user_activity(body.user_id, new_queries=1)
+        if not allowed:
+            raise HTTPException(status_code=403, detail=message)
+    else:
         client_ip = get_client_ip(request)
         allowed, message = check_sandbox_limits(client_ip, new_queries=1)
         if not allowed:
-            raise HTTPException(status_code=403, detail=f"Sandbox Limit: {message} Upgrade to Pro.")
-
-    if not llm_client:
-        raise HTTPException(status_code=500, detail="LLM Client not initialized.")
+            raise HTTPException(status_code=403, detail=f"Sandbox Limit: {message} Please log in or upgrade to Pro.")
     
     embedder, reranker = request.app.state.embedder, request.app.state.reranker
     active_strategy = route_query(llm_client, body.query) if body.strategy == "auto" else body.strategy
@@ -214,9 +246,6 @@ async def query_documents(request: Request, body: QueryRequest):
             reranker=reranker, strategy=active_strategy, document_source=body.document_name, project_name=body.project_name
         )
         
-    if body.user_email:
-        record_user_activity(body.user_email, new_queries=1)
-        
     return {
         "query": body.query,
         "answer": generate_answer(llm_client, body.query, retrieved_chunks, model_name=MODEL_NAME),
@@ -225,11 +254,29 @@ async def query_documents(request: Request, body: QueryRequest):
     }
 
 @router.get("/export/{project_name}")
-async def export_project(project_name: str):
+async def export_project(project_name: str, user_id: str):
+    """Exports the specified project as a ZIP file. Requires the user ID for activity recording."""
+
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT tier, workspaces, export_unlocked, role FROM users WHERE id = ?", (user_id,))
+        user = c.fetchone()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    is_admin = user["role"] == "admin"
+    can_export = is_admin or user["tier"] == "pro" or user["export_unlocked"]
+
+    if not can_export:
+        raise HTTPException(status_code=403, detail="Data export requires the Pro tier or the $8 Data Export pass.")
+    
     zip_buffer, point_count, triplet_count = build_export_zip(q_client, MASTER_COLLECTION_NAME, project_name)
     if point_count == 0 and triplet_count == 0:
         raise HTTPException(status_code=404, detail=f"No data found for project '{project_name}'.")
 
     return StreamingResponse(
-        zip_buffer, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'}
+        zip_buffer, media_type="application/zip", 
+        headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'}
     )

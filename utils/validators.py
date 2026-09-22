@@ -5,7 +5,7 @@ import pypdf
 import sqlite3
 from fastapi import HTTPException, UploadFile
 from typing import List, Tuple, Optional
-from db.users import is_admin_email
+from db.users import is_admin_email, is_admin_id
 
 # Initialize SQLite IP Tracker
 DB_DIR = "/data" if os.path.exists("/data") else "."
@@ -54,11 +54,12 @@ def validate_and_save_uploads(
     files: List[UploadFile],
     project_name: str,
     client_ip: str,
-    user_email: Optional[str] = None
+    user_id: Optional[str] = None
 ) -> Tuple[List[Tuple[str, str]], int]:
     """Validates file count, parses PDF pages, and enforces IP limits before processing."""
+
     # Admins have zero restrictions
-    if is_admin_email(user_email):
+    if is_admin_id(user_id):
         saved_temp_files = []
         total_upload_pages = 0
         try:
