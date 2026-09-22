@@ -1,10 +1,9 @@
 import { useUser, SignInButton } from "@clerk/nextjs";
-import { LogIn } from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { Check, Sparkles, Building2, ArrowRight, ShieldCheck, HelpCircle, Users, Zap, Terminal } from "lucide-react";
+import { Check, Sparkles, Building2, ArrowRight, ShieldCheck, HelpCircle, Users, Zap, Terminal, LogIn } from "lucide-react";
 import {
   CALENDLY_URL,
   CONTACT_EMAIL,
