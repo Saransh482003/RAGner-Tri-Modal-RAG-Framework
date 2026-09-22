@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useUser } from "@clerk/nextjs";
+import { API_BASE } from "@/config/api";
 import { MAX_TOTAL_PAGES, PRO_MAX_TOTAL_PAGES, MAX_QUESTIONS } from "./limits";
 
 const STORAGE_KEY = "ragner_usage_v1";
@@ -21,6 +23,7 @@ function loadState() {
 }
 
 export function useUsageTracker() {
+  const { user, isSignedIn } = useUser();
   const [usage, setUsage] = useState(defaultState);
   const [hydrated, setHydrated] = useState(false);
 
@@ -28,6 +31,24 @@ export function useUsageTracker() {
     setUsage(loadState());
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (!isSignedIn || !user?.id) return;
+
+    fetch(`${API_BASE}/auth/user/${encodeURIComponent(user.id)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const isProOrAdmin = data.tier === "pro" || data.tier === "admin_unrestricted" || data.role === "admin";
+        setUsage((prev) => ({
+          ...prev,
+          isPro: isProOrAdmin,
+          pagesUsed: data.pages_processed || prev.pagesUsed,
+          questionsUsed: data.queries_made || prev.questionsUsed,
+        }));
+      })
+      .catch((err) => console.error("Could not fetch server limits:", err));
+  }, [isSignedIn, user?.id]);
 
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
@@ -42,8 +63,6 @@ export function useUsageTracker() {
     setUsage((prev) => ({ ...prev, pagesUsed: prev.pagesUsed + count }));
   }, []);
 
-  // SIMULATED CHECKOUT -- replace with a real Stripe Checkout redirect + webhook
-  // that flips this flag server-side once payment is confirmed.
   const simulateUpgrade = useCallback(() => {
     setUsage((prev) => ({ ...prev, isPro: true }));
   }, []);

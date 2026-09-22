@@ -47,4 +47,3 @@ async def root():
         "status": "Online", 
         "message": "RAG API is running."
     }
-

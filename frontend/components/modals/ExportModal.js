@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PackageOpen, Check, Loader2, Download, ExternalLink } from "lucide-react";
+import { SignInButton } from "@clerk/nextjs";
 import Modal from "./Modal";
 import { EXPORT_PRICE_USD, LEMON_EXPORT_URL } from "@/lib/limits";
 import { API_BASE } from "@/config/api";
@@ -11,13 +12,22 @@ const CONTENTS = [
   "neo4j_import.cypher -- ready-to-run MERGE statements",
 ];
 
-export default function ExportModal({ open, onClose, projectName, isPro = false }) {
-  const [phase, setPhase] = useState("pitch"); // pitch -> processing -> done -> error
+export default function ExportModal({ open, onClose, projectName, userId, isPro = false }) {
+  const [phase, setPhase] = useState("pitch");
+
+  const checkoutUrl = userId
+    ? `${LEMON_EXPORT_URL}&checkout[custom][user_id]=${userId}`
+    : null;
 
   const handleFreeDownload = async () => {
+    if (!userId) return;
     setPhase("processing");
     try {
-      const response = await fetch(`${API_BASE}/export/${encodeURIComponent(projectName)}`);
+      // Pass user_id query parameter to satisfy FastAPI requirement
+      const response = await fetch(
+        `${API_BASE}/export/${encodeURIComponent(projectName)}?user_id=${encodeURIComponent(userId)}`
+      );
+      
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.detail || "Export failed");
@@ -83,9 +93,9 @@ export default function ExportModal({ open, onClose, projectName, isPro = false 
             <button className={styles.modalPrimaryBtn} onClick={handleFreeDownload}>
               Download Export (.zip)
             </button>
-          ) : (
+          ) : userId ? (
             <a
-              href={LEMON_EXPORT_URL}
+              href={checkoutUrl}
               target="_blank"
               rel="noopener noreferrer"
               className={styles.modalPrimaryBtn}
@@ -101,6 +111,13 @@ export default function ExportModal({ open, onClose, projectName, isPro = false 
               <span>Pay ${EXPORT_PRICE_USD} & Unlock Download</span>
               <ExternalLink size={16} />
             </a>
+          ) : (
+            <SignInButton mode="modal">
+              <button className={styles.modalPrimaryBtn} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <LogIn size={16} />
+                <span>Sign In to Purchase Export</span>
+              </button>
+            </SignInButton>
           )}
 
           <button className={styles.modalGhostBtn} onClick={handleClose}>
@@ -133,8 +150,7 @@ export default function ExportModal({ open, onClose, projectName, isPro = false 
         <div className={styles.modalCenter}>
           <h3 className={styles.modalTitle}>Export failed</h3>
           <p className={styles.modalSubtitle}>
-            No data was found for this project, or the server is unreachable. Confirm the
-            project has been uploaded and try again.
+            Failed to fetch export. Confirm you have the Pro tier or have completed checkout.
           </p>
           <button className={styles.modalPrimaryBtn} onClick={() => setPhase("pitch")}>
             Try again

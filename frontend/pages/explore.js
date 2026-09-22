@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
@@ -23,6 +24,7 @@ import styles from "@/styles/Home.module.css";
 const EXPLORE_QUESTION_LIMIT = 10;
 
 export default function ExploreBotPage() {
+  const { user } = useUser();
   const router = useRouter();
   const { bot: botQueryKey } = router.query;
 
@@ -73,6 +75,7 @@ export default function ExploreBotPage() {
           collection_name: MASTER_COLLECTION,
           project_name: activeBot.projectName,
           document_name: null,
+          user_id: user?.id || null,
         }),
       });
 

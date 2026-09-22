@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import styles from "@/styles/Home.module.css";
 
-export default function Modal({ open, onClose, children, width = 460 }) {
+export default function Modal({ open = true, onClose, children, width = 460 }) {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e) => {

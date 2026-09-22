@@ -10,13 +10,14 @@ import EnterpriseModal from "@/components/modals/EnterpriseModal";
 import ExportModal from "@/components/modals/ExportModal";
 import { useUsageTracker } from "@/lib/useUsageTracker";
 import { Home as HomeIcon, CreditCard, Sparkles, Compass, LogIn } from "lucide-react";
-import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { MASTER_COLLECTION, COMPANY_DIRECTORY } from "@/config/companies";
 import { API_BASE } from "@/config/api";
 import styles from "@/styles/Home.module.css";
 
 export default function WorkspacePage() {
   const router = useRouter();
+  const { user, isSignedIn } = useUser();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [strategy, setStrategy] = useState("auto");
@@ -31,6 +32,21 @@ export default function WorkspacePage() {
 
   const sampleQuestions = matchingCompany?.sampleQuestions || [];
 
+  useEffect(() => {
+    if (isSignedIn && user) {
+      fetch(`${API_BASE}/auth/sync-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          email: user.primaryEmailAddress?.emailAddress || "",
+          name: user.fullName || user.firstName || "Developer",
+          provider: user.externalAccounts?.[0]?.provider || "google",
+        }),
+      }).catch((err) => console.error("User sync error:", err));
+    }
+  }, [isSignedIn, user]);
+  
   useEffect(() => {
     if (router.isReady) {
       if (router.query.project) {
@@ -90,6 +106,10 @@ export default function WorkspacePage() {
     formData.append("project_name", projectName);
     formData.append("build_raptor", buildRaptor.toString());
     formData.append("build_graph", buildGraph.toString());
+
+    if (user?.id) {
+      formData.append("user_id", user.id);
+    }
 
     try {
       const response = await fetch(`${API_BASE}/upload`, {
@@ -174,6 +194,7 @@ export default function WorkspacePage() {
           collection_name: collectionName,
           project_name: projectName === "master" ? null : projectName,
           document_name: selectedDoc === "all" ? null : selectedDoc,
+          user_id: user?.id || null,
         }),
       });
 
@@ -330,14 +351,25 @@ export default function WorkspacePage() {
       </div>
 
       {activeModal === "upgrade" && (
-        <UpgradeModal onClose={closeModal} onUpgraded={usage.simulateUpgrade} />
+        <UpgradeModal 
+          open={true} 
+          onClose={closeModal} 
+          userId={user?.id}
+          onUpgraded={usage.simulateUpgrade} 
+        />
       )}
       {activeModal === "enterprise" && (
-        <EnterpriseModal reason={enterpriseReason} onClose={closeModal} />
+        <EnterpriseModal 
+          open={true} 
+          reason={enterpriseReason} 
+          onClose={closeModal} 
+        />
       )}
       {activeModal === "export" && (
         <ExportModal
+          open={true}
           projectName={projectName || "default_project"}
+          userId={user?.id}
           onClose={closeModal}
           isPro={usage.isPro}
         />

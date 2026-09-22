@@ -1,3 +1,5 @@
+import { useUser, SignInButton } from "@clerk/nextjs";
+import { LogIn } from "lucide-react";
 import Head from "next/head";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
@@ -22,6 +24,17 @@ import {
 import styles from "@/styles/Pricing.module.css";
 
 export default function PricingPage() {
+  const { user } = useUser();
+
+  // Dynamically build the checkout links with the Clerk ID!
+  const starterCheckoutUrl = user?.id 
+    ? `${LEMON_STARTER_URL}&checkout[custom][user_id]=${user.id}` 
+    : null;
+    
+  const proCheckoutUrl = user?.id 
+    ? `${LEMON_PRO_URL}&checkout[custom][user_id]=${user.id}` 
+    : null;
+    
   return (
     <>
       <Head>
@@ -132,14 +145,22 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <a
-              href={LEMON_STARTER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.btnSecondary}
-            >
-              Start Starter Plan
-            </a>
+            {user?.id ? (
+              <a
+                href={starterCheckoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.btnSecondary}
+              >
+                Start Starter Plan
+              </a>
+            ) : (
+              <SignInButton mode="modal">
+                <button className={styles.btnSecondary} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <LogIn size={16} /> Sign In to Buy
+                </button>
+              </SignInButton>
+            )}
           </div>
 
           {/* TIER 3: PRO DEVELOPER ($79/mo — POPULAR) */}
@@ -181,15 +202,23 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <a
-              href={LEMON_PRO_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.btnPrimary}
-            >
-              <span>Upgrade to Pro</span>
-              <ArrowRight size={16} />
-            </a>
+            {user?.id ? (
+              <a
+                href={proCheckoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.btnPrimary}
+              >
+                <span>Upgrade to Pro</span>
+                <ArrowRight size={16} />
+              </a>
+            ) : (
+              <SignInButton mode="modal">
+                <button className={styles.btnPrimary} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <LogIn size={16} /> Sign In to Upgrade
+                </button>
+              </SignInButton>
+            )}
           </div>
 
           {/* TIER 4: ENTERPRISE (CUSTOM DEPLOYMENT) */}
