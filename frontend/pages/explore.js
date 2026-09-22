@@ -41,6 +41,15 @@ export default function ExploreBotPage() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
+    const saved = localStorage.getItem(`ragner_explore_${botKey}`);
+    if (saved) {
+      setQuestionsAsked(parseInt(saved, 10));
+    } else {
+      setQuestionsAsked(0);
+    }
+  }, [botKey]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -49,6 +58,7 @@ export default function ExploreBotPage() {
     setMessages([]);
     setInput("");
     setQuestionsAsked(0);
+    localStorage.removeItem(`ragner_explore_${botKey}`);
   }, [botKey]);
 
   const locked = questionsAsked >= EXPLORE_QUESTION_LIMIT;
@@ -63,7 +73,11 @@ export default function ExploreBotPage() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: queryText }]);
     setIsQuerying(true);
-    setQuestionsAsked((prev) => prev + 1);
+    setQuestionsAsked((prev) => {
+      const newCount = prev + 1;
+      localStorage.setItem(`ragner_explore_${botKey}`, newCount.toString());
+      return newCount;
+    });
 
     try {
       const response = await fetch(`${API_BASE}/query`, {

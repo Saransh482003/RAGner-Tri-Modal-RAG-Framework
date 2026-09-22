@@ -31,21 +31,6 @@ export default function WorkspacePage() {
   );
 
   const sampleQuestions = matchingCompany?.sampleQuestions || [];
-
-  useEffect(() => {
-    if (isSignedIn && user) {
-      fetch(`${API_BASE}/auth/sync-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.id,
-          email: user.primaryEmailAddress?.emailAddress || "",
-          name: user.fullName || user.firstName || "Developer",
-          provider: user.externalAccounts?.[0]?.provider || "google",
-        }),
-      }).catch((err) => console.error("User sync error:", err));
-    }
-  }, [isSignedIn, user]);
   
   useEffect(() => {
     if (router.isReady) {

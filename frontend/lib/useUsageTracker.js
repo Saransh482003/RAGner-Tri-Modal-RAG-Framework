@@ -32,23 +32,37 @@ export function useUsageTracker() {
     setHydrated(true);
   }, []);
 
+  // Sync the user AND get the admin/pro status in a single request!
   useEffect(() => {
     if (!isSignedIn || !user?.id) return;
 
-    fetch(`${API_BASE}/auth/user/${encodeURIComponent(user.id)}`)
+    fetch(`${API_BASE}/auth/sync-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: user.id,
+        email: user.primaryEmailAddress?.emailAddress || "",
+        name: user.fullName || user.firstName || "Developer",
+        provider: user.externalAccounts?.[0]?.provider || "google",
+      }),
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (!data) return;
-        const isProOrAdmin = data.tier === "pro" || data.tier === "admin_unrestricted" || data.role === "admin";
+        if (!data || !data.user) return;
+        
+        const userData = data.user;
+        // If the DB says you are an admin, instantly unlock everything
+        const isProOrAdmin = userData.tier === "pro" || userData.tier === "admin_unrestricted" || userData.role === "admin";
+        
         setUsage((prev) => ({
           ...prev,
           isPro: isProOrAdmin,
-          pagesUsed: data.pages_processed || prev.pagesUsed,
-          questionsUsed: data.queries_made || prev.questionsUsed,
+          pagesUsed: userData.pages_processed || prev.pagesUsed,
+          questionsUsed: userData.queries_made || prev.questionsUsed,
         }));
       })
-      .catch((err) => console.error("Could not fetch server limits:", err));
-  }, [isSignedIn, user?.id]);
+      .catch((err) => console.error("Could not sync user limits:", err));
+  }, [isSignedIn, user]);
 
   useEffect(() => {
     if (!hydrated || typeof window === "undefined") return;
