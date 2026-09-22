@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from utils.validators import validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
-from db.users import is_admin_email, sync_or_create_user, get_user_by_email, ADMIN_EMAILS
+from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, ADMIN_EMAILS
 from services.pipeline import execute_pipeline_stages, get_existing_chunks_from_qdrant
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
@@ -90,6 +90,10 @@ async def upload_document(
             execute_pipeline_stages, 
             doc_chunks_map, embedder, llm_client, q_client, MASTER_COLLECTION_NAME, project_name, build_raptor, build_graph
         )
+
+    # Record usage in users table if authenticated
+    if user_email:
+        record_user_activity(user_email, new_pages=len(saved_temp_files), new_workspace=project_name)
 
     return {
         "message": f"Processed {len(files)} document(s). Base chunks stored under master collection with project tag '{project_name}'.",
@@ -179,6 +183,9 @@ async def query_documents(request: Request, body: QueryRequest):
             client=q_client, collection_name=MASTER_COLLECTION_NAME, query=body.query, embedder=embedder,
             reranker=reranker, strategy=active_strategy, document_source=body.document_name, project_name=body.project_name
         )
+        
+    if body.user_email:
+        record_user_activity(body.user_email, new_queries=1)
         
     return {
         "query": body.query,

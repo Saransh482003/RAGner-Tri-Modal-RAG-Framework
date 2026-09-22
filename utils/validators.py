@@ -1,5 +1,6 @@
 import os
 import uuid
+import os
 import pypdf
 import sqlite3
 from fastapi import HTTPException, UploadFile
@@ -7,7 +8,8 @@ from typing import List, Tuple, Optional
 from db.users import is_admin_email
 
 # Initialize SQLite IP Tracker
-DB_PATH = "sandbox_usage.db"
+DB_DIR = "/data" if os.path.exists("/data") else "."
+DB_PATH = os.path.join(DB_DIR, "sandbox_usage.db")
 
 def init_sandbox_db():
     with sqlite3.connect(DB_PATH) as conn:
