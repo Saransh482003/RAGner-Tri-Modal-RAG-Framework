@@ -62,5 +62,30 @@ export const COMPANY_DIRECTORY = {
       "How many paid seats has M365 Copilot surpassed as of FY26 Q4?",
       "The NVIDIA Vera Rubin platform is ramping into full production. Which specific cloud partners are currently running it?"
     ]
+  },
+  "triomics-bot": {
+    id: "triomics-bot",
+    displayName: "Triomics ChatBot",
+    projectName: "triomics-bot",
+    slug: "triomics-bot",
+    description: "A bot you can use to know about Triomics's Press Releases.",
+    docs: [
+      "Mount Sinai Launches AI-Powered- 8 Jan.pdf",
+      "MSK to Deploy Triomics’ AI Platform- 4 Nov.pdf",
+      "Savista partners with Triomics- 4 Nov.pdf",
+      "Triomics implements AI cancer clinical-trial- 18 Nov.pdf",
+      "Trusted by Leading Cancer Centers- 27 May.pdf"
+    ],
+    tags: ["Triomics", "Healthcare", "Press Releases"],
+    author: "saransh482003",
+    sampleQuestions: [
+      "What is the primary benefit of deploying the oncology-specific AI tool across the Mount Sinai Health System?",
+      "What kind of unstructured patient data does Triomics' AI read through at Yale Cancer Center to generate a shortlist of trials?",
+      "How did Memorial Sloan Kettering Cancer Center (MSK) initially engage with Triomics before their broader collaboration?",
+      "According to published results, how much have users of Triomics' product increased trial matches and enrollments?",
+      "How does the Triomics platform explain its inclusion or exclusion decisions for clinical trials?",
+      "How long can it manually take to pre-screen patient medical records against clinical trial portfolios?",
+      "What are the main goals of the automated workflows in the Savista and Triomics platform?"
+    ]
   }
 };
