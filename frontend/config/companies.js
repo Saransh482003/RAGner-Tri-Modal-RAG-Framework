@@ -39,17 +39,28 @@ export const COMPANY_DIRECTORY = {
     ]
   },
   nvidia: {
-    id: "nvidia",
-    displayName: "NVIDIA Financials & Architecture",
-    projectName: "nvidia",
-    slug: "nvidia",
-    description: "Annual reports and technical roadmaps covering Hopper H100/H200, Blackwell architecture, and Vera Rubin datacenter platforms.",
-    docs: ["NVIDIAAn.pdf"],
-    tags: ["Neo4j Graph", "Semiconductors", "Financials"],
+    id: "big-corp-financial",
+    displayName: "The 5 Big Corporates",
+    projectName: "big-corp-financial",
+    slug: "big-corp-financial",
+    description: "2026 Annual reports and technical roadmaps of 5 big corporates: Alphabet, Amazon, Meta, Microsoft and NVIDIA.",
+    docs: [
+      "Allphabet-earnings-release.pdf",
+      "AMZN-Q2-2026-Earnings-Release.pdf",
+      "META-Q2-2026-Earnings-Call-Transcript.pdf",
+      "Microsoft FY 2026.pdf",
+      "NVIDIAAn.pdf"
+    ],
+    tags: ["Financials", "Annual Reports", "Corporate Strategy"],
     author: "saransh482003",
     sampleQuestions: [
-      "What was NVIDIA's Data Center revenue for Q2 FY27 and its year-over-year growth?",
-      "Which specific cloud partners are currently running the NVIDIA Vera Rubin platform?"
+      "What was the year-over-year revenue growth for Google Cloud in Q2 2026, and what specific products drove this acceleration?",
+      "According to the Q2 2026 Supplemental Information table, what was the total revenue for 'Google Search & other' compared to 'YouTube ads'?",
+      "What is AWS Forward Deployed Engineering, how much is Amazon investing in it, and who are some of its early customers?",
+      "Look at the Segment Information table. What was the operating income for the AWS segment in Q2 2026 compared to Q2 2025?",
+      "What new strategic venture did Meta announce regarding its Meta Compute effort in El Paso, Texas?",
+      "How many paid seats has M365 Copilot surpassed as of FY26 Q4?",
+      "The NVIDIA Vera Rubin platform is ramping into full production. Which specific cloud partners are currently running it?"
     ]
   }
 };
