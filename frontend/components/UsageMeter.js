@@ -24,10 +24,13 @@ export default function UsageMeter({ filesCount, pagesUsed, pageCap, questionsUs
   return (
     <div className={styles.usageMeter}>
       <div className={styles.usageMeterHeader}>
-        <span>Trial usage</span>
+        {/* Dynamic header so it doesn't say "Trial" for admins */}
+        <span>{isPro ? "Workspace usage" : "Trial usage"}</span>
         {isPro && <span className={styles.proBadge}>PRO</span>}
       </div>
-      <Bar label="Files this session" used={filesCount} cap={MAX_FILES} />
+      
+      {/* CRITICAL: Added unlimited={isPro} here */}
+      <Bar label="Files this session" used={filesCount} cap={MAX_FILES} unlimited={isPro} />
       <Bar label="Pages ingested" used={pagesUsed} cap={pageCap} unlimited={isPro} />
       <Bar label="Questions asked" used={questionsUsed} cap={MAX_QUESTIONS} unlimited={isPro} />
     </div>

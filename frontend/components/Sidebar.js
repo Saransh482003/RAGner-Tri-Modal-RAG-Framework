@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import {
-  Paperclip, FileText, Loader2, RefreshCw, PackageOpen,
+  Paperclip, FileText, Loader2, RefreshCw, PackageOpen, Trash2
 } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
 import UsageMeter from "./UsageMeter";
@@ -19,6 +19,8 @@ export default function Sidebar({
   setCollectionName,
   projectName,
   setProjectName,
+  workspaces = [],
+  onDeleteProject,
   buildRaptor,
   setBuildRaptor,
   buildGraph,
@@ -38,6 +40,7 @@ export default function Sidebar({
   const [pendingPages, setPendingPages] = useState(0);
   const [isCounting, setIsCounting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef(null);
 
   const processFileList = async (fileList) => {
@@ -50,13 +53,13 @@ export default function Sidebar({
       return;
     }
 
-    if (fileArray.length > MAX_FILES) {
+    if (!usage.isPro && fileArray.length > MAX_FILES) {
       onEnterpriseTrigger(`You selected ${fileArray.length} files (limit: ${MAX_FILES}).`);
       return;
     }
 
     const oversized = fileArray.find((f) => f.size > MAX_FILE_SIZE_MB * 1024 * 1024);
-    if (oversized) {
+    if (!usage.isPro && oversized) {
       const sizeMb = (oversized.size / (1024 * 1024)).toFixed(1);
       onEnterpriseTrigger(`"${oversized.name}" is ${sizeMb}MB (limit: ${MAX_FILE_SIZE_MB}MB).`);
       return;
@@ -101,6 +104,18 @@ export default function Sidebar({
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleDelete = async () => {
+    if (!projectName) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to delete project "${projectName}"? This will permanently wipe all its vectors from Qdrant.`
+    );
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    await onDeleteProject(projectName);
+    setIsDeleting(false);
+  };
+
   return (
     <div className={styles.sidebar}>
       <div className={styles.header}>
@@ -128,12 +143,54 @@ export default function Sidebar({
           </div>
 
           <div className={styles.field}>
-            <label className={styles.fieldLabel}>Project Slug (Tag)</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <label className={styles.fieldLabel} style={{ margin: 0 }}>Project Slug (Tag)</label>
+              {onDeleteProject && projectName && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  title={`Delete project "${projectName}"`}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--danger, #ef4444)",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                    padding: "2px 4px",
+                    display: "flex",
+                    alignItems: "center",
+                    opacity: isDeleting ? 0.5 : 1,
+                  }}
+                >
+                  {isDeleting ? <Loader2 size={13} className={styles.spin} /> : <Trash2 size={13} />}
+                </button>
+              )}
+            </div>
+
+            {/* If the user has saved projects from prior logins, offer quick switching */}
+            {workspaces.length > 0 && (
+              <select
+                value={workspaces.includes(projectName) ? projectName : ""}
+                onChange={(e) => {
+                  if (e.target.value) setProjectName(e.target.value);
+                }}
+                className={styles.textInputSm}
+                style={{ marginBottom: "6px" }}
+              >
+                <option value="" disabled>Saved Projects ({workspaces.length})</option>
+                {workspaces.map((ws) => (
+                  <option key={ws} value={ws}>
+                    {ws}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-              placeholder="e.g. nvidia"
+              placeholder="e.g. nvidia or create-new"
               className={styles.textInputSm}
             />
           </div>

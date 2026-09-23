@@ -12,6 +12,7 @@ __pycache__/
 *.dump
 *.snapshot
 *.db
+*.db*
 sandbox_usage.db
 
 # Aber nicht diese Frontend JSON-Dateien

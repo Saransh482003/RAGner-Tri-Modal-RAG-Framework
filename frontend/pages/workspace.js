@@ -21,6 +21,7 @@ export default function WorkspacePage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [strategy, setStrategy] = useState("auto");
+  const [workspaces, setWorkspaces] = useState([]);
 
   const [collectionName] = useState(MASTER_COLLECTION);
   const [projectName, setProjectName] = useState("");
@@ -32,6 +33,31 @@ export default function WorkspacePage() {
 
   const sampleQuestions = matchingCompany?.sampleQuestions || [];
   
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchWorkspaces = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/user/workspaces?user_id=${user.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const userProjects = data.workspaces || [];
+          setWorkspaces(userProjects);
+
+          // Auto-select their most recent project if no query param was set
+          if (!router.query.project && userProjects.length > 0) {
+            setProjectName(userProjects[userProjects.length - 1]);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load user workspaces:", err);
+      }
+    };
+
+    fetchWorkspaces();
+  }, [user?.id, router.query.project]);
+
+
   useEffect(() => {
     if (router.isReady) {
       if (router.query.project) {
@@ -122,6 +148,34 @@ export default function WorkspacePage() {
       setStatusMessage("Upload failed.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteProject = async (slugToDelete) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/delete-project/${slugToDelete}?user_id=${user?.id || ""}`,
+        { method: "DELETE" }
+      );
+
+      if (res.ok) {
+        const updated = workspaces.filter((w) => w !== slugToDelete);
+        setWorkspaces(updated);
+        setUploadedDocs([]);
+        setMessages((prev) => [
+          ...prev,
+          { role: "ai", content: `Project '${slugToDelete}' and its indexed vectors were successfully deleted.` }
+        ]);
+        setProjectName(updated.length > 0 ? updated[updated.length - 1] : "default-project");
+      } else {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to delete project");
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: `Failed to delete project: ${err.message}`, isError: true }
+      ]);
     }
   };
 
@@ -297,6 +351,8 @@ export default function WorkspacePage() {
             collectionName={collectionName}
             projectName={projectName}
             setProjectName={setProjectName}
+            workspaces={workspaces}
+            onDeleteProject={handleDeleteProject}
             buildRaptor={buildRaptor}
             setBuildRaptor={setBuildRaptor}
             buildGraph={buildGraph}

@@ -4,20 +4,22 @@ import json
 import os
 import sqlite3
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Form, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from qdrant_client import models
 from dotenv import load_dotenv
 
-from utils.validators import DB_PATH, validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits
-from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, upgrade_user_tier, ADMIN_EMAILS
+
+from utils.validators import DB_PATH, validate_and_save_uploads, cleanup_temp_files, check_sandbox_limits, get_sandbox_usage
+from db.users import is_admin_email, sync_or_create_user, get_user_by_email, record_user_activity, upgrade_user_tier, ADMIN_EMAILS, get_user_workspaces, add_user_workspace, remove_user_workspace
 from services.pipeline import execute_pipeline_stages, get_existing_chunks_from_qdrant
 from services.ingesting import parse_pdf_document
 from services.chunking import advanced_chunking
 from services.retrieval_vector import retrieve_vector_context
 from services.retrieval_graph import retrieve_graph_context
 from services.exporter import build_export_zip
-from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks
+from db.qdrant_embedder import get_qdrant_client, init_collection, upsert_chunks, get_qdrant_client, delete_project_chunks_neo4j, delete_project_chunks_qdrant
 from services.generation import initialize_llm_client, generate_answer
 from services.query_router import route_query
 
@@ -92,6 +94,7 @@ async def upload_document(
                 upsert_chunks(q_client, MASTER_COLLECTION_NAME, project_name, base_chunks, embedder)
                 total_base_chunks += len(base_chunks)
                 doc_chunks_map[filename] = base_chunks
+        add_user_workspace(user_id, project_name)
     finally:
         cleanup_temp_files(saved_temp_files)
 
@@ -143,6 +146,15 @@ async def sync_user_endpoint(body: UserSyncRequest):
     return {
         "status": "success",
         "user": user_record
+    }
+
+@router.get("/usage")
+async def get_anonymous_usage(request: Request):
+    """Returns the server-side quota consumed by the current anonymous client."""
+    pages_processed, queries_made = get_sandbox_usage(get_client_ip(request))
+    return {
+        "pages_processed": pages_processed,
+        "queries_made": queries_made,
     }
 
 @router.get("/auth/user/{user_id}")
@@ -283,3 +295,30 @@ async def export_project(project_name: str, user_id: str):
         zip_buffer, media_type="application/zip", 
         headers={"Content-Disposition": f'attachment; filename="{project_name}_export.zip"'}
     )
+
+
+@router.delete("/delete-project/{project_name}")
+async def delete_project(
+    project_name: str, 
+    user_id: str = Query(None), 
+    collection_name: str = "ragner_master_collection"
+):
+    qdrant_response = delete_project_chunks_qdrant(collection_name, project_name)
+    neo4j_response = delete_project_chunks_neo4j(project_name)
+    
+    if qdrant_response["status"] == "error":
+        raise HTTPException(status_code=500, detail=f"Qdrant Error: {qdrant_response['message']}")
+    if neo4j_response["status"] == "error":
+        raise HTTPException(status_code=500, detail=f"Neo4j Error: {neo4j_response['message']}")
+        
+    # Remove from SQLite so it disappears from the dropdown permanently
+    if user_id:
+        remove_user_workspace(user_id, project_name)
+        
+    return {"message": f"Successfully purged project '{project_name}' from vector, graph, and workspace store."}
+
+
+@router.get("/user/workspaces")
+async def fetch_user_workspaces(user_id: str = Query(...)):
+    workspaces = get_user_workspaces(user_id)
+    return {"workspaces": workspaces}

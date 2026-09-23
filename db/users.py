@@ -102,6 +102,12 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
             data["workspaces"] = []
         return data
 
+def get_db_connection():
+    """Establishes a connection to the SQLite database with dictionary-like row access."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row 
+    return conn
+
 def sync_or_create_user(
     user_id: str,
     email: str,
@@ -118,33 +124,42 @@ def sync_or_create_user(
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
+        
+        # 1. Check if the user/admin email already exists
         c.execute("SELECT workspaces FROM users WHERE email = ?", (norm_email,))
         existing = c.fetchone()
         
-        default_workspaces = json.dumps(["global-master", "nvidia", "scaler"] if is_admin else ["default"])
-        initial_workspaces = existing[0] if existing else default_workspaces
-
-        c.execute("""
-            INSERT INTO users (id, email, name, provider, role, tier, workspaces_allowed, pages_processed, queries_made, workspaces)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
-            ON CONFLICT(email) DO UPDATE SET
-                id = excluded.id,  -- CRITICAL FIX: Overwrite the dummy ID with the real Clerk ID
-                name = COALESCE(excluded.name, users.name),
-                provider = excluded.provider,
-                role = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 'admin' ELSE excluded.role END,
-                tier = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 'admin_unrestricted' ELSE users.tier END,
-                workspaces_allowed = CASE WHEN users.role = 'admin' OR excluded.role = 'admin' THEN 999999 ELSE users.workspaces_allowed END,
-                updated_at = CURRENT_TIMESTAMP
-        """, (user_id, norm_email, name, provider, role, tier, workspaces_cap, initial_workspaces))
+        if existing:
+            # 2. FORCE UPDATE the Primary Key. Standard UPDATE bypasses UPSERT limitations.
+            c.execute("""
+                UPDATE users 
+                SET id = ?, 
+                    name = COALESCE(?, name), 
+                    provider = ?, 
+                    role = CASE WHEN role = 'admin' OR ? = 'admin' THEN 'admin' ELSE role END,
+                    tier = CASE WHEN role = 'admin' OR ? = 'admin' THEN 'admin_unrestricted' ELSE tier END,
+                    workspaces_allowed = CASE WHEN role = 'admin' OR ? = 'admin' THEN 999999 ELSE workspaces_allowed END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE email = ?
+            """, (user_id, name, provider, role, role, role, norm_email))
+        else:
+            # 3. Create brand new user
+            default_workspaces = json.dumps(["global-master", "nvidia", "scaler"] if is_admin else ["default"])
+            c.execute("""
+                INSERT INTO users (id, email, name, provider, role, tier, workspaces_allowed, pages_processed, queries_made, workspaces)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+            """, (user_id, norm_email, name, provider, role, tier, workspaces_cap, default_workspaces))
+            
         conn.commit()
 
-        # Look it up by the new Clerk ID just to be absolutely safe
+        # Fetch the finalized row using the real Clerk ID
         c.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         data = dict(c.fetchone())
         try:
             data["workspaces"] = json.loads(data.get("workspaces") or "[]")
         except Exception:
             data["workspaces"] = []
+            
         return data
 
 def record_user_activity(user_id: str, new_pages: int = 0, new_queries: int = 0, new_workspace: Optional[str] = None) -> Tuple[bool, str]:
@@ -219,3 +234,42 @@ def upgrade_user_tier(user_id: str, tier: str, unlock_export: bool = False) -> b
         conn.commit()
         return True
 
+def get_user_workspaces(user_id: str) -> list:
+    """Retrieves all project slugs associated with a user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT workspaces FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row and row["workspaces"]:
+        try:
+            return json.loads(row["workspaces"])
+        except Exception:
+            return []
+    return []
+
+def add_user_workspace(user_id: str, project_name: str):
+    """Appends a project slug to the user's workspaces list if not already present."""
+    if not user_id or not project_name:
+        return
+    workspaces = get_user_workspaces(user_id)
+    if project_name not in workspaces:
+        workspaces.append(project_name)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET workspaces = ? WHERE id = ?", (json.dumps(workspaces), user_id))
+        conn.commit()
+        conn.close()
+
+def remove_user_workspace(user_id: str, project_name: str):
+    """Removes a project slug from the user's workspaces list."""
+    if not user_id:
+        return
+    workspaces = get_user_workspaces(user_id)
+    if project_name in workspaces:
+        workspaces.remove(project_name)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET workspaces = ? WHERE id = ?", (json.dumps(workspaces), user_id))
+        conn.commit()
+        conn.close()

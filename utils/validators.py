@@ -53,6 +53,14 @@ def check_sandbox_limits(ip: str, new_pages: int = 0, new_queries: int = 0):
         
         return True, "Allowed"
 
+def get_sandbox_usage(ip: str) -> Tuple[int, int]:
+    """Returns the persisted anonymous usage for a client IP."""
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT pages_processed, queries_made FROM usage WHERE ip_address = ?", (ip,))
+        row = c.fetchone()
+        return (row[0], row[1]) if row else (0, 0)
+
 def validate_and_save_uploads(
     files: List[UploadFile],
     project_name: str,

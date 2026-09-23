@@ -24,8 +24,10 @@ def get_chunk_hash(text: str) -> str:
 def get_neo4j_driver():
     """Initializes and returns the Neo4j database driver."""
     try:
+        print("🔄 Connecting to Neo4j Aura!!")
         driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
         driver.verify_connectivity()
+        print("✅ Connected to Neo4j Aura!!")
         return driver
     except Exception as e:
         print(f"Failed to connect to Neo4j. Is the database docker running? Error: {e}")

@@ -3,9 +3,12 @@ import uuid
 from typing import List, Dict, Any
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.http import models
+from services.builder_graph import get_neo4j_driver
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 def get_qdrant_client() -> QdrantClient:
     """
@@ -17,10 +20,10 @@ def get_qdrant_client() -> QdrantClient:
 
     if qdrant_api_key:
         print("Connecting to Managed Qdrant Cloud...")
-        return QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+        return QdrantClient(url=qdrant_url, api_key=qdrant_api_key, timeout=60.0)
     
     print("Connecting to Local Qdrant Docker...")
-    return QdrantClient(url=qdrant_url)
+    return QdrantClient(url=qdrant_url, timeout=60.0)
 
 def init_collection(client: QdrantClient, collection_name: str, vector_size=1536):
     """
@@ -69,3 +72,45 @@ def upsert_chunks(client: QdrantClient, collection_name: str, project_name: str,
         points=points
     )
     print("Upsert complete!")
+
+
+def delete_project_chunks_qdrant(collection_name: str, project_name: str):
+    """Deletes all vector chunks associated with a specific project in Qdrant."""
+    qdrant_client = get_qdrant_client()
+    try:
+        qdrant_client.delete(
+            collection_name=collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="project_name",  # Update this if your metadata key is different (e.g., 'source', 'doc_id')
+                            match=models.MatchValue(value=project_name),
+                        ),
+                    ],
+                )
+            ),
+        )
+        return {"status": "success", "message": f"Deleted Qdrant chunks for project: {project_name}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def delete_project_chunks_neo4j(project_name: str):
+    """Deletes all nodes and relationships associated with a specific project in Neo4j."""
+    driver = get_neo4j_driver()
+    
+    # CRITICAL FIX: Ensure the driver actually connected before opening a session
+    if not driver:
+        return {"status": "error", "message": "Neo4j driver is not initialized or failed to connect."}
+        
+    query = """
+    MATCH (n {project_name: $project_name})
+    DETACH DELETE n
+    """
+    
+    try:
+        with driver.session() as session:
+            session.run(query, project_name=project_name)
+        return {"status": "success", "message": f"Deleted Neo4j nodes for project: {project_name}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
