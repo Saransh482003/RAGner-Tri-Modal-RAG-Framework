@@ -63,11 +63,11 @@ export const COMPANY_DIRECTORY = {
       "The NVIDIA Vera Rubin platform is ramping into full production. Which specific cloud partners are currently running it?"
     ]
   },
-  "triomics-bot": {
-    id: "triomics-bot",
+  "triomics": {
+    id: "triomics",
     displayName: "Triomics ChatBot",
-    projectName: "triomics-bot",
-    slug: "triomics-bot",
+    projectName: "triomics",
+    slug: "triomics",
     description: "A bot you can use to know about Triomics's Press Releases.",
     docs: [
       "Mount Sinai Launches AI-Powered- 8 Jan.pdf",
