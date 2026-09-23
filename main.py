@@ -32,7 +32,10 @@ app = FastAPI(title="RAGner API", description="Multi-Strategy RAG backend for re
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # TODO: During production, restrict this to the frontend URL
+    allow_origins=[
+        "http://localhost:3000",
+        "https://ragner.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
