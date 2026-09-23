@@ -38,7 +38,7 @@ export const COMPANY_DIRECTORY = {
       "What library and tooling skills are specifically listed for Project 6 (Meesho - A/B Experimentation Platform - Checkout Conversion)?"
     ]
   },
-  nvidia: {
+  "big-corp-financial": {
     id: "big-corp-financial",
     displayName: "The 5 Big Corporates",
     projectName: "big-corp-financial",
