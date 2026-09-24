@@ -87,5 +87,30 @@ export const COMPANY_DIRECTORY = {
       "How long can it manually take to pre-screen patient medical records against clinical trial portfolios?",
       "What are the main goals of the automated workflows in the Savista and Triomics platform?"
     ]
+  },
+  "neuralix": {
+    id: "neuralix",
+    displayName: "Neuralix ChatBot",
+    projectName: "neuralix",
+    slug: "neuralix",
+    description: "Know all about Neuralix's Data Science and AI services. Chat with the bot and get instant answers.",
+    docs: [
+      "AI for Manufacturing – AI Solutions For all Industries.pdf",
+      "AI for Oil and Gas – AI Solutions For all Industries.pdf",
+      "AI for Renewable Energy – AI Solutions For all Industries.pdf",
+      "AI for Water Management – AI Solutions For all Industries.pdf",
+    ],
+    tags: ["Neuralix", "Data Science", "AI Services"],
+    author: "saransh482003",
+    sampleQuestions: [
+      "What specific measurable benefit did Neuralixai achieve for a leading midstream operator in their saltwater disposal operations?",
+      "Which specific operational systems does Neuralixai's AI for Oil and Gas integrate with to process live data?",
+      "How does Neuralixai's AI specifically assist with solar power plants and wind energy assets?",
+      "What kind of operational shift does Neuralixai enable for renewable asset maintenance?",
+      "How does Neuralixai's AI optimize pump energy usage in water management operations?",
+      "How does the AI platform address non-revenue water (NRW) and distribution leaks?",
+      "Which major organizations and industry programs have backed Neuralixai's manufacturing AI solution?",
+      "How does Neuralixai prevent 'quality leakage' from increasing operational costs in manufacturing?"
+    ]
   }
 };
