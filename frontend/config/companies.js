@@ -112,5 +112,33 @@ export const COMPANY_DIRECTORY = {
       "Which major organizations and industry programs have backed Neuralixai's manufacturing AI solution?",
       "How does Neuralixai prevent 'quality leakage' from increasing operational costs in manufacturing?"
     ]
+  },
+  "straive": {
+    id: "straive",
+    displayName: "Straive ChatBot",
+    projectName: "straive",
+    slug: "straive",
+    description: "Know all about Straive's Data Science and AI services. Chat with the bot and get instant answers.",
+    docs: [
+      "straive.com-AI Design Deployment.pdf",
+      "straive.com-AI in Customer Experience Solution for Enterprises Enhance CX Operations.pdf",
+      "straive.com-AI-Enabled GCCs for PortCos and Mid-Market Enterprises.pdf",
+      "straive.com-Data Management and Analytics Services.pdf",
+      "straive.com-Enterprise Agentic AI Solutions and Services.pdf",
+      "straive.com-GenAI Accelerator Toolkit That Dont Box You In.pdf",
+      "straive.com-Insights Analytics.pdf",
+    ],
+    tags: ["Straive", "Data Science", "AI Services"],
+    author: "saransh482003",
+    sampleQuestions: [
+      "How did Straive apply its AI solutions to enhance educational accessibility for a prominent U.S.-based publisher?",
+      "What specific AI design and deployment services does Straive offer to augment business capabilities?",
+      "What operational improvements does Straive's Tier 2 AI-Accelerated Expert Support deliver to contact centers?",
+      "What are the key functionalities of Straive's DocExplore toolkit for unstructured documents?",
+      "What role does Straive's Spark.AI platform play in its Insights & Analytics offerings?",
+      "What measurable results did Straive achieve through the Michigan Data Hub education project?",
+      "How is Straive's AI-powered customer support framework structured across different interaction tiers?",
+      "Which specific Centers of Excellence (COEs) does Straive implement to scale impact in its GCCs?"
+    ]
   }
 };
